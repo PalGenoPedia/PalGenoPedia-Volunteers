@@ -70,10 +70,12 @@ robots.txt               Disallow: / — keeps this subdomain out of search enti
   `apps-script/appsscript.json` (or use `clasp push` — see below).
 - In that same admin spreadsheet, add a `Volunteers` tab: column A is the
   allowed volunteer's email, one per row; column B is their role — leave
-  blank (or `volunteer`) for someone who can only submit new incidents, or
-  set `editor` for someone who can also edit incidents already in the
-  sheet. A coordinator maintains this directly. Put its spreadsheet ID into
-  `VOLUNTEERS_SPREADSHEET_ID` in `Code.gs`.
+  blank (or `volunteer`) for someone who can only submit new incidents,
+  `editor` for someone who can also edit incidents already in the sheet, or
+  `admin` for someone who additionally gets the in-portal activity log
+  (`admin` includes editor privileges). A coordinator maintains this
+  directly. Put its spreadsheet ID into `VOLUNTEERS_SPREADSHEET_ID` in
+  `Code.gs`.
 - `SPREADSHEETS` in `Code.gs` already points at the four real workbooks
   (Hospitals, Universities, Schools, Religious Sites) per `PIPELINE.md` in
   the main repo — do not repoint these to a different spreadsheet.
@@ -144,6 +146,22 @@ Non-editor volunteers don't see the Edit button at all, and the backend
 rejects an `update_incident` request from a non-editor regardless
 (`error: "not_authorized"`) — the UI check is a convenience, not the
 actual boundary.
+
+## Activity log (admin role)
+
+Every submission and edit is already written to the `SubmissionLog` tab in
+the admin spreadsheet, one row per action:
+`Timestamp, Volunteer email, Action ("submit"/"edit"), Section, Facility,
+Reference`. `admin`-role volunteers see this as a live "Activity log" view
+in the portal itself (top bar → **Activity log**), most recent 200 entries,
+newest first — pulled straight from that tab via a `doGet` action gated on
+`isAdmin`, same non-authoritative-UI-check-plus-real-backend-check pattern
+as the editor role above.
+
+Non-admins (including editors) don't see the "Activity log" link and get
+`error: "not_authorized"` if they call the endpoint directly. Nothing
+about this changes what gets logged or when — it's a read-only view onto
+data the backend was already writing.
 
 ## Explicitly out of scope
 

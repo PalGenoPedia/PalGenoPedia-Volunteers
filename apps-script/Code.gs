@@ -43,9 +43,9 @@ const SPREADSHEETS = {
 };
 
 // Spreadsheet + tab holding the volunteer allow-list. Column A: email,
-// column B: role ("editor" or blank/"volunteer"). A coordinator maintains
-// this directly — add a row to grant access, set column B to "editor" to
-// let that person also edit existing incidents, not just submit new ones.
+// column B: role — blank/"volunteer" (submit only), "editor" (can also
+// edit existing incidents), or "admin" (editor privileges plus the
+// activity log). A coordinator maintains this directly.
 const VOLUNTEERS_SPREADSHEET_ID = "1eAaU37vq3EszdzsHWoa-ln0DNouQX3It0-VkWK1vUss";
 const VOLUNTEERS_SHEET_NAME = "Volunteers";
 
@@ -87,7 +87,7 @@ function doGet(e) {
     const action = e.parameter.action;
 
     if (action === "whoami") {
-      return jsonResponse({ email: volunteer.email, isEditor: volunteer.isEditor });
+      return jsonResponse({ email: volunteer.email, isEditor: volunteer.isEditor, isAdmin: volunteer.isAdmin });
     }
     if (action === "facilities") {
       return jsonResponse({ facilities: listFacilities(e.parameter.section) });
@@ -96,6 +96,10 @@ function doGet(e) {
       return jsonResponse({
         incidents: listIncidents(e.parameter.section, e.parameter.facility),
       });
+    }
+    if (action === "activity_log") {
+      if (!volunteer.isAdmin) throw new PortalError("not_authorized", "Only admins can view the activity log.");
+      return jsonResponse({ entries: listActivityLog(200) });
     }
     return jsonResponse({ error: "unknown_action" });
   });
@@ -118,8 +122,9 @@ function doPost(e) {
 
 // --- Auth ------------------------------------------------------------------
 
-// Returns { email, isEditor }. Throws not_approved_volunteer for anyone not
-// on the allow-list at all, editor or not.
+// Returns { email, role, isEditor, isAdmin }. Throws not_approved_volunteer
+// for anyone not on the allow-list at all, regardless of role. "admin"
+// implies editor privileges as well as the activity log.
 function requireVolunteer(idToken) {
   if (!idToken) throw new PortalError("not_approved_volunteer", "Missing token.");
 
@@ -129,7 +134,12 @@ function requireVolunteer(idToken) {
   if (role === undefined) {
     throw new PortalError("not_approved_volunteer", email + " is not an approved volunteer.");
   }
-  return { email: email, isEditor: role === "editor" };
+  return {
+    email: email,
+    role: role,
+    isEditor: role === "editor" || role === "admin",
+    isAdmin: role === "admin",
+  };
 }
 
 // Verifies a Google-issued ID token via Google's tokeninfo endpoint rather
@@ -153,8 +163,9 @@ function verifyIdToken(idToken) {
   return info.email;
 }
 
-// Map<lowercased email, "editor" | "volunteer">. Column B blank or anything
-// other than "editor" (case-insensitive) counts as a plain volunteer.
+// Map<lowercased email, "admin" | "editor" | "volunteer">. Column B blank
+// or anything other than "editor"/"admin" (case-insensitive) counts as a
+// plain volunteer.
 function getVolunteerRoles() {
   const sheet = SpreadsheetApp.openById(VOLUNTEERS_SPREADSHEET_ID).getSheetByName(VOLUNTEERS_SHEET_NAME);
   const values = sheet.getRange(1, 1, sheet.getLastRow(), 2).getValues();
@@ -162,7 +173,8 @@ function getVolunteerRoles() {
   for (const row of values) {
     const email = String(row[0] || "").trim().toLowerCase();
     if (!email || !email.includes("@")) continue;
-    const role = String(row[1] || "").trim().toLowerCase() === "editor" ? "editor" : "volunteer";
+    const rawRole = String(row[1] || "").trim().toLowerCase();
+    const role = rawRole === "admin" ? "admin" : rawRole === "editor" ? "editor" : "volunteer";
     roles.set(email, role);
   }
   return roles;
@@ -308,7 +320,7 @@ function submitIncident(body, email) {
     throw new PortalError("append_failed", "Could not save the incident. Please try again or contact a coordinator.");
   }
 
-  logSubmission(email, body);
+  logSubmission(email, "submit", body.section, body.facility, body.submissionId || "");
   return { ok: true };
 }
 
@@ -422,11 +434,7 @@ function updateIncident(body, volunteer) {
   setCell(INC.lastEditedBy, volunteer.email);
   setCell(INC.lastEditedAt, new Date());
 
-  logSubmission(volunteer.email, {
-    section: body.section,
-    facility: body.facility,
-    submissionId: "(edit of row " + rowNumber + ")",
-  });
+  logSubmission(volunteer.email, "edit", body.section, body.facility, "row " + rowNumber);
   return { ok: true };
 }
 
@@ -472,14 +480,40 @@ function validateSubmission(fields) {
 
 // --- Audit log + failure notification ----------------------------------
 
-function logSubmission(email, body) {
+// Fixed column order: Timestamp, Volunteer email, Action, Section,
+// Facility, Reference. Read positionally by listActivityLog() below — this
+// tab is internal-only, not part of PIPELINE.md's schema, so there's no
+// header-name convention to match.
+function logSubmission(email, actionType, section, facility, reference) {
   try {
     const ss = SpreadsheetApp.openById(VOLUNTEERS_SPREADSHEET_ID);
     const sheet = ss.getSheetByName("SubmissionLog") || ss.insertSheet("SubmissionLog");
-    sheet.appendRow([new Date(), email, body.section, body.facility, body.submissionId]);
+    sheet.appendRow([new Date(), email, actionType, section, facility, reference]);
   } catch (err) {
     // Audit logging is best-effort; never let it fail the actual submission.
   }
+}
+
+// Most recent `limit` entries from the audit log, newest first. Admin-only
+// (see doGet's "activity_log" action).
+function listActivityLog(limit) {
+  const sheet = SpreadsheetApp.openById(VOLUNTEERS_SPREADSHEET_ID).getSheetByName("SubmissionLog");
+  if (!sheet || sheet.getLastRow() < 1) return [];
+
+  const numRows = sheet.getLastRow();
+  const values = sheet.getRange(1, 1, numRows, 6).getValues();
+  const entries = values
+    .map((row) => ({
+      timestamp: row[0] instanceof Date ? row[0].toISOString() : String(row[0] || ""),
+      email: String(row[1] || ""),
+      action: String(row[2] || ""),
+      section: String(row[3] || ""),
+      facility: String(row[4] || ""),
+      reference: String(row[5] || ""),
+    }))
+    .filter((entry) => entry.email.includes("@")); // drop the header row / any blank rows
+  entries.reverse();
+  return entries.slice(0, limit);
 }
 
 function notifyCoordinatorOfFailure(email, body, err) {

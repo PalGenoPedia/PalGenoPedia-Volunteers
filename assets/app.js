@@ -22,6 +22,7 @@ let state = {
   currentFacility: null,
   incidents: [],
   isEditor: false,
+  isAdmin: false,
 };
 
 // Must match the <option> list in app.html's #incident-form exactly — the
@@ -285,6 +286,50 @@ function startEditIncident(rowEl, incident) {
   rowEl.appendChild(form);
 }
 
+// --- Admin activity log --------------------------------------------------
+
+async function showAdminLog() {
+  render("tpl-admin-log");
+  el("back-to-sections").addEventListener("click", showSections);
+
+  const body = el("log-body");
+  body.innerHTML = '<tr><td colspan="6" class="muted">Loading…</td></tr>';
+
+  try {
+    const data = await apiGet({ action: "activity_log" });
+    const entries = data.entries || [];
+    body.innerHTML = "";
+    if (entries.length === 0) {
+      body.innerHTML = '<tr><td colspan="6" class="muted">No activity yet.</td></tr>';
+      return;
+    }
+    for (const entry of entries) {
+      const tr = document.createElement("tr");
+      const cells = [
+        formatTimestamp(entry.timestamp),
+        entry.email,
+        entry.action,
+        entry.section,
+        entry.facility,
+        entry.reference,
+      ];
+      for (const value of cells) {
+        const td = document.createElement("td");
+        td.textContent = value;
+        tr.appendChild(td);
+      }
+      body.appendChild(tr);
+    }
+  } catch (e) {
+    body.innerHTML = `<tr><td colspan="6" class="error">${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+
+function formatTimestamp(iso) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+}
+
 // --- Form / duplicate check -------------------------------------------
 
 function wireForm(facility) {
@@ -367,7 +412,14 @@ function truncate(str, n) {
   try {
     const data = await apiGet({ action: "whoami" });
     state.isEditor = !!data.isEditor;
-    document.getElementById("whoami").textContent = data.email + (state.isEditor ? " (editor)" : "");
+    state.isAdmin = !!data.isAdmin;
+    const badge = state.isAdmin ? " (admin)" : state.isEditor ? " (editor)" : "";
+    document.getElementById("whoami").textContent = data.email + badge;
+    if (state.isAdmin) {
+      const adminLink = document.getElementById("admin-link");
+      adminLink.hidden = false;
+      adminLink.addEventListener("click", showAdminLog);
+    }
     showSections();
   } catch (e) {
     appEl.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;

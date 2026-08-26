@@ -11,6 +11,7 @@
 <body>
 <header class="topbar">
   <span class="brand">PalGenoPedia Volunteer Portal</span>
+  <button id="admin-link" class="link-btn" hidden>Activity log</button>
   <span id="whoami" class="muted"></span>
   <button id="signout" class="link-btn">Sign out</button>
 </header>
@@ -97,6 +98,22 @@
           <p class="success" data-role="submit-success" hidden>Submitted. A reviewer will verify it in the sheet.</p>
         </form>
       </div>
+    </div>
+  </section>
+</template>
+
+<template id="tpl-admin-log">
+  <section>
+    <button class="back-btn" data-role="back-to-sections">&larr; Sections</button>
+    <h2>Activity log</h2>
+    <p class="muted small">Most recent 200 submissions and edits, newest first.</p>
+    <div class="table-wrap">
+      <table data-role="log-table">
+        <thead>
+          <tr><th>Time</th><th>Volunteer</th><th>Action</th><th>Section</th><th>Facility</th><th>Reference</th></tr>
+        </thead>
+        <tbody data-role="log-body"></tbody>
+      </table>
     </div>
   </section>
 </template>
