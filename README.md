@@ -5,7 +5,11 @@ form instead of editing Google Sheets directly. Submissions land in the same
 spreadsheets the existing PalGenoPedia sync already reads via
 `tools/build_records.py`.
 
-MVP scope (phase 1, per the architecture plan): **Hospitals only.**
+Covers Hospitals, Universities, Schools, and Religious Sites — the four
+facility-incident sections that share one schema. Massacres/historical
+events are still out of scope (see below); that needs its own form
+template and a sync gap closed first, per the architecture plan's phased
+rollout.
 
 ## How it works
 
@@ -68,17 +72,18 @@ robots.txt               Disallow: / — keeps this subdomain out of search enti
   allowed volunteer emails, one per row — this is the allow-list a
   coordinator maintains directly. Put its spreadsheet ID into
   `VOLUNTEERS_SPREADSHEET_ID` in `Code.gs`.
-- `SPREADSHEETS.hospitals` in `Code.gs` already points at the real Hospitals
-  workbook (`1JUJTf0sdPo4o-DluzuwjMOMAc6Fhe4k9kFv-UIXyMg4`, tabs
-  `Hospital_facilities` / `Hospital_incidents`) per `PIPELINE.md` in the main
-  repo — do not repoint these to a different spreadsheet.
-- **Add one new column to `Hospital_incidents`:** `submission_id`. This is
-  additive (see Data contract below) — it doesn't touch anything
-  `build_records.py` reads.
-- The Apps Script project needs edit access to both the admin spreadsheet
-  and the Hospitals workbook — either run it under a Google account that
-  already has editor access to both, or have the workbook owner share it
-  with whichever account owns the script.
+- `SPREADSHEETS` in `Code.gs` already points at the four real workbooks
+  (Hospitals, Universities, Schools, Religious Sites) per `PIPELINE.md` in
+  the main repo — do not repoint these to a different spreadsheet.
+- **Add one new column to each of the four incidents tabs**
+  (`Hospital_incidents`, `University_incidents`, `Schools_incidents`,
+  `Religous_incidents` — note the missing "i", that's the real tab name):
+  `submission_id`. This is additive (see Data contract below) — it doesn't
+  touch anything `build_records.py` reads.
+- The Apps Script project needs edit access to the admin spreadsheet and all
+  four content workbooks — either run it under a Google account that already
+  has editor access to all of them, or have each workbook shared with
+  whichever account owns the script.
 - Deploy → New deployment → **Web app** → Execute as: **Me** → Who has
   access: **Anyone** (not "Anyone with Google account" — see architecture
   note above for why). Copy the deployment URL into `config.js`.
@@ -95,9 +100,10 @@ robots.txt               Disallow: / — keeps this subdomain out of search enti
 ## Data contract
 
 Matches `PIPELINE.md` in the main repo exactly — see the `INC` column map in
-`apps-script/Code.gs`. Facilities live in `Hospital_facilities`, incidents in
-`Hospital_incidents` (same workbook, separate tabs); a new incident is
-appended to the incidents tab, matched to its facility by `facility_name`.
+`apps-script/Code.gs`. Each section's facilities and incidents live in two
+tabs of the same workbook (e.g. `Hospital_facilities` /
+`Hospital_incidents`); a new incident is appended to the incidents tab,
+matched to its facility by `facility_name`.
 
 **Matching is by name, never by id.** `PIPELINE.md` documents that
 `id`/`incident_id`/`facility_id` are formulas that count non-blank rows and
@@ -111,9 +117,10 @@ appends a blank row and lets the sheet's own formula derive those, exactly
 like a manually typed row. It does write a `submission_id` (UUID, generated
 client-side) into a dedicated column so a reviewer can trace a row back to
 its portal submission even after `incident_id` shifts. That column must be
-added to `Hospital_incidents` once, manually, before this goes live.
+added to each of the four incidents tabs once, manually, before this goes
+live.
 
-## Explicitly out of scope for this MVP
+## Explicitly out of scope
 
 - Massacres/historical events (different schema entirely — needs its own
   form template, and the historical spreadsheet isn't in the sync's

@@ -23,6 +23,23 @@ const SPREADSHEETS = {
     facilitiesSheet: "Hospital_facilities",
     incidentsSheet: "Hospital_incidents",
   },
+  universities: {
+    spreadsheetId: "1USy-ZPTwzio49_yKkkc-5WPOscIBDa5tetRZ8NTWZFo",
+    facilitiesSheet: "University_facilities",
+    incidentsSheet: "University_incidents",
+  },
+  schools: {
+    spreadsheetId: "1NuD4YMqCwUZyCDE4r0xHyzBdWod9WFH-cEuN6eP7LWw",
+    facilitiesSheet: "Schools_facilities",
+    incidentsSheet: "Schools_incidents",
+  },
+  "religious-sites": {
+    spreadsheetId: "1_zn0gHo2XlEoQFHtPwNxJG6pFvYiK9WbYiR-6thxj7A",
+    // sic — the tab is spelled "Religous" (missing the "i") in the live
+    // sheet; PIPELINE.md flags this as load-bearing, do not "fix" it here.
+    facilitiesSheet: "Religous_facilities",
+    incidentsSheet: "Religous_incidents",
+  },
 };
 
 // Spreadsheet + tab holding the volunteer allow-list. One email per row in

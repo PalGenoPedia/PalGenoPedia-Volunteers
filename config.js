@@ -8,8 +8,10 @@ window.PORTAL_CONFIG = {
   // OAuth 2.0 Client ID from Google Cloud Console (Web application type).
   GOOGLE_CLIENT_ID: "1017482285870-q0dl90l30asn736kad0u7qbucopj209a.apps.googleusercontent.com",
 
-  // Sections live in the MVP. Extend as later phases ship (see README).
   SECTIONS: [
     { id: "hospitals", label: "Hospitals" },
+    { id: "universities", label: "Universities" },
+    { id: "schools", label: "Schools" },
+    { id: "religious-sites", label: "Religious Sites" },
   ],
 };
