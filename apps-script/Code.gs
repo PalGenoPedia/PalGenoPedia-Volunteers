@@ -264,30 +264,42 @@ function submitIncident(body, email) {
   const incidentsSheet = SpreadsheetApp.openById(config.spreadsheetId).getSheetByName(config.incidentsSheet);
   const headers = incidentsSheet.getRange(1, 1, 1, incidentsSheet.getLastColumn()).getValues()[0].map((h) => String(h).trim());
 
-  // Append a blank row and let the sheet's own id/incident_id formulas fill
-  // themselves in, exactly like a manually typed row — never write those
-  // columns directly (see PIPELINE.md).
-  const newRow = new Array(headers.length).fill("");
-  const setByHeader = (headerName, value) => {
+  // Deliberately NOT sheet.appendRow(): that method appends after the last
+  // row with content in ANY column of the whole sheet, and these sheets
+  // carry formula columns (id/incident_id, translation tabs) dragged far
+  // past the real data as padding — a cell holding a formula counts as
+  // "content" even when it displays blank. appendRow lands past all of
+  // that, disconnected from the real incidents and past wherever the id
+  // formula was dragged to, which is why a submitted incident could show up
+  // far below the real rows with no incident_id at all.
+  //
+  // Instead: find the last row with a real facility_name (the actual data
+  // column, never padded) and insert immediately after it. Google Sheets
+  // auto-extends a formula into a newly inserted row sitting inside its
+  // dragged range — the same thing that happens when a human inserts a row
+  // by hand — so id/incident_id fill in correctly.
+  const lastDataRow = findLastDataRow(incidentsSheet, headers);
+  incidentsSheet.insertRowAfter(lastDataRow);
+  const newRowNumber = lastDataRow + 1;
+
+  const setCell = (headerName, value) => {
     const idx = headers.indexOf(headerName);
-    if (idx !== -1) newRow[idx] = value;
+    if (idx !== -1) incidentsSheet.getRange(newRowNumber, idx + 1).setValue(value);
   };
 
-  setByHeader(INC.facilityName, facilityName);
-  setByHeader(INC.facilityId, lookupFacilityId(config, facilityName)); // best-effort, not used for matching
-  setByHeader(INC.startingDate, fields.starting_date || "");
-  setByHeader(INC.endingDate, fields.ending_date || "");
-  setByHeader(INC.attackType, fields.attack_type || "");
-  setByHeader(INC.description, fields.description || "");
-  setByHeader(INC.sourceUrl1, fields.source_url_1 || "");
-  setByHeader(INC.sourceUrl2, fields.source_url_2 || "");
-  setByHeader(INC.civiliansKilled, fields.civilians_killed || "");
-  setByHeader(INC.civiliansInjured, fields.civilians_injured || "");
-  setByHeader(INC.addedBy, email);
-  setByHeader(INC.submissionId, body.submissionId || "");
-
   try {
-    incidentsSheet.appendRow(newRow);
+    setCell(INC.facilityName, facilityName);
+    setCell(INC.facilityId, lookupFacilityId(config, facilityName)); // best-effort, not used for matching
+    setCell(INC.startingDate, fields.starting_date || "");
+    setCell(INC.endingDate, fields.ending_date || "");
+    setCell(INC.attackType, fields.attack_type || "");
+    setCell(INC.description, fields.description || "");
+    setCell(INC.sourceUrl1, fields.source_url_1 || "");
+    setCell(INC.sourceUrl2, fields.source_url_2 || "");
+    setCell(INC.civiliansKilled, fields.civilians_killed || "");
+    setCell(INC.civiliansInjured, fields.civilians_injured || "");
+    setCell(INC.addedBy, email);
+    setCell(INC.submissionId, body.submissionId || "");
   } catch (err) {
     notifyCoordinatorOfFailure(email, body, err);
     throw new PortalError("append_failed", "Could not save the incident. Please try again or contact a coordinator.");
@@ -295,6 +307,20 @@ function submitIncident(body, email) {
 
   logSubmission(email, body);
   return { ok: true };
+}
+
+// Last row where the facility_name column actually has a value — unlike
+// sheet.getLastRow(), this ignores padding rows further down that only
+// contain a dragged formula in some other column.
+function findLastDataRow(sheet, headers) {
+  const nameIdx = headers.indexOf(INC.facilityName);
+  if (nameIdx === -1) return sheet.getLastRow();
+  const values = sheet.getRange(2, nameIdx + 1, sheet.getMaxRows() - 1, 1).getValues();
+  let last = 1; // header row, if the sheet is otherwise empty
+  for (let i = 0; i < values.length; i++) {
+    if (String(values[i][0] || "").trim() !== "") last = i + 2;
+  }
+  return last;
 }
 
 // Overwrites an existing incident row in place. Restricted to volunteers
