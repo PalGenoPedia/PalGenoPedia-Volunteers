@@ -314,17 +314,23 @@ function submitIncident(body, email) {
 
 // Copies every formula cell (id, incident_id, or anything else
 // formula-driven) into targetRow, one column at a time. For each column,
-// searches upward from lastDataRow for the nearest row that actually has a
-// live formula there — NOT just the row immediately above, because that
-// row's formula cell may have been overwritten with a plain typed value at
-// some point (a manual fix, a hand-typed row, whatever), in which case
-// there's nothing to copy from it. copyTo() adjusts relative references
-// the same way a manual drag-down would, regardless of how far the source
-// row is from the target. Plain-value columns are left untouched here —
-// the caller writes those explicitly via setCell.
+// finds the nearest row that actually has a live formula there — checking
+// upward from lastDataRow first, then downward past targetRow if nothing
+// turned up above. Both directions matter here: the real, hand-entered
+// incident rows can be plain typed text with no formula at all (that's
+// what the live Hospital_incidents sheet turned out to have), while a
+// formula pattern like `id`/`incident_id`'s running counter may only exist
+// as pre-dragged padding further down the sheet, past any real data.
+// copyTo() adjusts relative references the same way a manual drag-down
+// would, regardless of how far or which direction the source row is from
+// the target. Plain-value columns are left untouched here — the caller
+// writes those explicitly via setCell.
 function copyFormulaCells(sheet, lastDataRow, targetRow, numCols) {
+  const sheetMaxRow = sheet.getMaxRows();
   for (let c = 1; c <= numCols; c++) {
-    const sourceRow = findFormulaSourceRow(sheet, c, lastDataRow);
+    const sourceRow =
+      findFormulaSourceRowUpward(sheet, c, lastDataRow) ||
+      findFormulaSourceRowDownward(sheet, c, targetRow + 1, sheetMaxRow);
     if (sourceRow) {
       sheet.getRange(sourceRow, c).copyTo(sheet.getRange(targetRow, c));
     }
@@ -333,11 +339,24 @@ function copyFormulaCells(sheet, lastDataRow, targetRow, numCols) {
 
 // Nearest row at or above searchFromRow (down to row 2) whose cell in this
 // column holds a live formula. Returns null if none of them do.
-function findFormulaSourceRow(sheet, col, searchFromRow) {
+function findFormulaSourceRowUpward(sheet, col, searchFromRow) {
   if (searchFromRow < 2) return null;
   const formulas = sheet.getRange(2, col, searchFromRow - 1, 1).getFormulas();
   for (let i = formulas.length - 1; i >= 0; i--) {
     if (formulas[i][0]) return i + 2;
+  }
+  return null;
+}
+
+// Nearest row at or below searchFromRow whose cell in this column holds a
+// live formula. Capped at a few thousand rows past searchFromRow so a
+// sheet with no formula at all anywhere doesn't force a huge read.
+function findFormulaSourceRowDownward(sheet, col, searchFromRow, maxRow) {
+  if (searchFromRow > maxRow) return null;
+  const numRows = Math.min(maxRow - searchFromRow + 1, 5000);
+  const formulas = sheet.getRange(searchFromRow, col, numRows, 1).getFormulas();
+  for (let i = 0; i < formulas.length; i++) {
+    if (formulas[i][0]) return searchFromRow + i;
   }
   return null;
 }
