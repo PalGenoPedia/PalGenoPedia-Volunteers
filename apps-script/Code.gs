@@ -274,13 +274,16 @@ function submitIncident(body, email) {
   // far below the real rows with no incident_id at all.
   //
   // Instead: find the last row with a real facility_name (the actual data
-  // column, never padded) and insert immediately after it. Google Sheets
-  // auto-extends a formula into a newly inserted row sitting inside its
-  // dragged range — the same thing that happens when a human inserts a row
-  // by hand — so id/incident_id fill in correctly.
+  // column, never padded) and insert immediately after it, then explicitly
+  // copy that row's formula cells (id, incident_id, and anything else
+  // formula-driven) down into the new row. Note this does NOT happen
+  // automatically — the Sheets UI's "auto-extend a formula into a newly
+  // inserted row" behavior is a client-side convenience, not something
+  // Apps Script's insertRowAfter() replicates on its own.
   const lastDataRow = findLastDataRow(incidentsSheet, headers);
   incidentsSheet.insertRowAfter(lastDataRow);
   const newRowNumber = lastDataRow + 1;
+  copyFormulaCells(incidentsSheet, lastDataRow, newRowNumber, headers.length);
 
   const setCell = (headerName, value) => {
     const idx = headers.indexOf(headerName);
@@ -307,6 +310,21 @@ function submitIncident(body, email) {
 
   logSubmission(email, body);
   return { ok: true };
+}
+
+// Copies every formula cell (id, incident_id, or anything else
+// formula-driven) from sourceRow into targetRow, one column at a time.
+// copyTo() adjusts relative references the same way a manual drag-down
+// would, so a per-row formula like a running count keyed on ROW() lands
+// correct in the new row. Plain-value columns are left untouched here —
+// the caller writes those explicitly via setCell.
+function copyFormulaCells(sheet, sourceRow, targetRow, numCols) {
+  const formulas = sheet.getRange(sourceRow, 1, 1, numCols).getFormulas()[0];
+  for (let c = 0; c < numCols; c++) {
+    if (formulas[c]) {
+      sheet.getRange(sourceRow, c + 1).copyTo(sheet.getRange(targetRow, c + 1));
+    }
+  }
 }
 
 // Last row where the facility_name column actually has a value — unlike
