@@ -313,18 +313,33 @@ function submitIncident(body, email) {
 }
 
 // Copies every formula cell (id, incident_id, or anything else
-// formula-driven) from sourceRow into targetRow, one column at a time.
-// copyTo() adjusts relative references the same way a manual drag-down
-// would, so a per-row formula like a running count keyed on ROW() lands
-// correct in the new row. Plain-value columns are left untouched here —
+// formula-driven) into targetRow, one column at a time. For each column,
+// searches upward from lastDataRow for the nearest row that actually has a
+// live formula there — NOT just the row immediately above, because that
+// row's formula cell may have been overwritten with a plain typed value at
+// some point (a manual fix, a hand-typed row, whatever), in which case
+// there's nothing to copy from it. copyTo() adjusts relative references
+// the same way a manual drag-down would, regardless of how far the source
+// row is from the target. Plain-value columns are left untouched here —
 // the caller writes those explicitly via setCell.
-function copyFormulaCells(sheet, sourceRow, targetRow, numCols) {
-  const formulas = sheet.getRange(sourceRow, 1, 1, numCols).getFormulas()[0];
-  for (let c = 0; c < numCols; c++) {
-    if (formulas[c]) {
-      sheet.getRange(sourceRow, c + 1).copyTo(sheet.getRange(targetRow, c + 1));
+function copyFormulaCells(sheet, lastDataRow, targetRow, numCols) {
+  for (let c = 1; c <= numCols; c++) {
+    const sourceRow = findFormulaSourceRow(sheet, c, lastDataRow);
+    if (sourceRow) {
+      sheet.getRange(sourceRow, c).copyTo(sheet.getRange(targetRow, c));
     }
   }
+}
+
+// Nearest row at or above searchFromRow (down to row 2) whose cell in this
+// column holds a live formula. Returns null if none of them do.
+function findFormulaSourceRow(sheet, col, searchFromRow) {
+  if (searchFromRow < 2) return null;
+  const formulas = sheet.getRange(2, col, searchFromRow - 1, 1).getFormulas();
+  for (let i = formulas.length - 1; i >= 0; i--) {
+    if (formulas[i][0]) return i + 2;
+  }
+  return null;
 }
 
 // Last row where the facility_name column actually has a value — unlike
