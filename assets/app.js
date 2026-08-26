@@ -1,0 +1,255 @@
+// Volunteer portal SPA. No framework, no build step — matches the main
+// site's philosophy. All state lives in module-level vars; navigation is
+// just swapping which <template> is cloned into #app.
+
+const CONFIG = window.PORTAL_CONFIG;
+const appEl = document.getElementById("app");
+const idToken = sessionStorage.getItem("portal_id_token");
+
+if (!idToken) {
+  window.location.href = "index.html";
+}
+
+document.getElementById("signout").addEventListener("click", () => {
+  sessionStorage.removeItem("portal_id_token");
+  window.location.href = "index.html";
+});
+
+let state = {
+  sections: CONFIG.SECTIONS,
+  currentSection: null,
+  facilities: [],
+  currentFacility: null,
+  incidents: [],
+};
+
+async function apiGet(params) {
+  const url = new URL(CONFIG.API_URL);
+  url.searchParams.set("token", idToken);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  const res = await fetch(url.toString());
+  return handleApiResponse(res);
+}
+
+async function apiPost(body) {
+  // Apps Script Web Apps don't handle CORS preflights well, so this must
+  // stay a "simple request": no custom headers, text/plain body that the
+  // backend itself parses as JSON.
+  const res = await fetch(CONFIG.API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ token: idToken, ...body }),
+  });
+  return handleApiResponse(res);
+}
+
+async function handleApiResponse(res) {
+  let payload;
+  try {
+    payload = await res.json();
+  } catch (e) {
+    throw new Error("The server returned an unexpected response. Please try again.");
+  }
+  if (!res.ok || payload.error) {
+    if (payload.error === "not_approved_volunteer") {
+      sessionStorage.removeItem("portal_id_token");
+      window.location.href = "index.html?denied=1";
+      throw new Error("Not an approved volunteer.");
+    }
+    throw new Error(payload.message || "Request failed.");
+  }
+  return payload;
+}
+
+function render(templateId) {
+  const tpl = document.getElementById(templateId);
+  appEl.innerHTML = "";
+  appEl.appendChild(tpl.content.cloneNode(true));
+}
+
+function el(role, root = appEl) {
+  return root.querySelector(`[data-role="${role}"]`);
+}
+
+// --- Screens ---------------------------------------------------------
+
+function showSections() {
+  state.currentSection = null;
+  render("tpl-sections");
+  const grid = el("sections");
+  for (const section of state.sections) {
+    const btn = document.createElement("button");
+    btn.className = "section-card";
+    btn.textContent = section.label;
+    btn.addEventListener("click", () => showFacilities(section));
+    grid.appendChild(btn);
+  }
+}
+
+async function showFacilities(section) {
+  state.currentSection = section;
+  render("tpl-facilities");
+  el("section-title").textContent = section.label;
+  const listEl = el("facility-list");
+  listEl.innerHTML = '<p class="muted">Loading facilities…</p>';
+  el("back-to-sections").addEventListener("click", showSections);
+
+  try {
+    const data = await apiGet({ action: "facilities", section: section.id });
+    state.facilities = data.facilities || [];
+    renderFacilityList(state.facilities);
+  } catch (e) {
+    listEl.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+  }
+
+  el("facility-filter").addEventListener("input", (evt) => {
+    const q = evt.target.value.trim().toLowerCase();
+    renderFacilityList(state.facilities.filter((f) => f.name.toLowerCase().includes(q)));
+  });
+}
+
+function renderFacilityList(facilities) {
+  const listEl = el("facility-list");
+  listEl.innerHTML = "";
+  if (facilities.length === 0) {
+    listEl.innerHTML = '<p class="muted">No facilities found.</p>';
+    return;
+  }
+  for (const facility of facilities) {
+    const row = document.createElement("button");
+    row.className = "facility-row";
+    row.innerHTML = `<span>${escapeHtml(facility.name)}</span>
+      <span class="count">${facility.incidentCount} incident${facility.incidentCount === 1 ? "" : "s"}</span>`;
+    row.addEventListener("click", () => showFacilityDetail(facility));
+    listEl.appendChild(row);
+  }
+}
+
+async function showFacilityDetail(facility) {
+  state.currentFacility = facility;
+  render("tpl-facility-detail");
+  el("facility-title").textContent = facility.name;
+  el("back-to-facilities").addEventListener("click", () => showFacilities(state.currentSection));
+
+  const incidentListEl = el("incident-list");
+  incidentListEl.innerHTML = '<p class="muted">Loading incidents…</p>';
+
+  try {
+    const data = await apiGet({
+      action: "incidents",
+      section: state.currentSection.id,
+      facility: facility.id,
+    });
+    state.incidents = (data.incidents || []).sort((a, b) => (a.date < b.date ? 1 : -1));
+    el("incident-count").textContent = `(${state.incidents.length})`;
+    renderIncidentList(state.incidents);
+  } catch (e) {
+    incidentListEl.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+  }
+
+  wireForm(facility);
+}
+
+function renderIncidentList(incidents) {
+  const listEl = el("incident-list");
+  listEl.innerHTML = "";
+  if (incidents.length === 0) {
+    listEl.innerHTML = '<p class="muted">No recorded incidents yet for this facility.</p>';
+    return;
+  }
+  for (const incident of incidents) {
+    const row = document.createElement("div");
+    row.className = "incident-row";
+    row.innerHTML = `<div class="date">${escapeHtml(incident.date)} — ${escapeHtml(incident.attackType || "")}</div>
+      <div class="small">${escapeHtml(truncate(incident.description || "", 160))}</div>`;
+    listEl.appendChild(row);
+  }
+}
+
+// --- Form / duplicate check -------------------------------------------
+
+function wireForm(facility) {
+  const form = el("incident-form");
+  const dateInput = form.querySelector('[name="starting_date"]');
+  const dupWarning = el("dup-warning");
+
+  dateInput.addEventListener("change", () => {
+    const match = findNearbyIncident(dateInput.value);
+    if (match) {
+      dupWarning.hidden = false;
+      dupWarning.textContent =
+        `Possible duplicate: an incident is already recorded on ${match.date}` +
+        (match.attackType ? ` (${match.attackType})` : "") +
+        ". Check the list on the left before submitting.";
+    } else {
+      dupWarning.hidden = true;
+    }
+  });
+
+  form.addEventListener("submit", async (evt) => {
+    evt.preventDefault();
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const errorEl = el("submit-error");
+    const successEl = el("submit-success");
+    errorEl.hidden = true;
+    successEl.hidden = true;
+    submitBtn.disabled = true;
+
+    const formData = new FormData(form);
+    const payload = {
+      action: "submit_incident",
+      section: state.currentSection.id,
+      facility: facility.id,
+      submissionId: crypto.randomUUID(),
+      fields: Object.fromEntries(formData.entries()),
+    };
+
+    try {
+      await apiPost(payload);
+      successEl.hidden = false;
+      form.reset();
+      dupWarning.hidden = true;
+      // Refresh the incident list so the volunteer sees their own submission
+      // reflected immediately (also re-sharpens the duplicate check).
+      showFacilityDetail(facility);
+    } catch (e) {
+      errorEl.hidden = false;
+      errorEl.textContent = e.message;
+      submitBtn.disabled = false;
+    }
+  });
+}
+
+function findNearbyIncident(dateStr) {
+  if (!dateStr) return null;
+  const target = new Date(dateStr).getTime();
+  const oneDay = 24 * 60 * 60 * 1000;
+  return state.incidents.find((incident) => {
+    const d = new Date(incident.date).getTime();
+    return !Number.isNaN(d) && Math.abs(d - target) <= oneDay;
+  });
+}
+
+// --- Utilities ----------------------------------------------------------
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function truncate(str, n) {
+  return str.length > n ? str.slice(0, n) + "…" : str;
+}
+
+// --- Boot -----------------------------------------------------------------
+
+(async function init() {
+  try {
+    const data = await apiGet({ action: "whoami" });
+    document.getElementById("whoami").textContent = data.email || "";
+    showSections();
+  } catch (e) {
+    appEl.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+  }
+})();

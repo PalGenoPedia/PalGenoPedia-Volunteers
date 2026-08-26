@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>PalGenoPedia Volunteer Portal</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="config.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">PalGenoPedia Volunteer Portal</span>
+  <span id="whoami" class="muted"></span>
+  <button id="signout" class="link-btn">Sign out</button>
+</header>
+
+<main id="app" class="app-shell">
+  <p class="muted">Loading…</p>
+</main>
+
+<template id="tpl-sections">
+  <section>
+    <h2>Choose a section</h2>
+    <div class="grid" data-role="sections"></div>
+  </section>
+</template>
+
+<template id="tpl-facilities">
+  <section>
+    <button class="back-btn" data-role="back-to-sections">&larr; Sections</button>
+    <h2 data-role="section-title"></h2>
+    <input type="search" data-role="facility-filter" placeholder="Filter facilities…">
+    <div class="list" data-role="facility-list"></div>
+  </section>
+</template>
+
+<template id="tpl-facility-detail">
+  <section>
+    <button class="back-btn" data-role="back-to-facilities">&larr; Facilities</button>
+    <h2 data-role="facility-title"></h2>
+
+    <div class="two-col">
+      <div>
+        <h3>Existing incidents <span class="muted" data-role="incident-count"></span></h3>
+        <p class="muted small">Check this list before submitting — this is the duplicate check.</p>
+        <div class="list" data-role="incident-list"></div>
+      </div>
+
+      <div>
+        <h3>Document a new incident</h3>
+        <form data-role="incident-form">
+          <label>Date <span class="req">*</span>
+            <input type="date" name="starting_date" required>
+          </label>
+          <p class="warning" data-role="dup-warning" hidden></p>
+
+          <label>End date (if the incident spans multiple days)
+            <input type="date" name="ending_date">
+          </label>
+
+          <label>Attack type <span class="req">*</span>
+            <select name="attack_type" required>
+              <option value="">Select…</option>
+              <option>Airstrike</option>
+              <option>Shelling</option>
+              <option>Siege / access denial</option>
+              <option>Raid / incursion</option>
+              <option>Sniper fire</option>
+              <option>Detention of staff or patients</option>
+              <option>Other</option>
+            </select>
+          </label>
+
+          <label>Summary / full account <span class="req">*</span>
+            <textarea name="description" rows="5" required></textarea>
+          </label>
+
+          <label>Source URL <span class="req">*</span>
+            <input type="url" name="source_url_1" required placeholder="https://…">
+          </label>
+          <label>Additional source URL
+            <input type="url" name="source_url_2" placeholder="https://…">
+          </label>
+
+          <div class="two-col">
+            <label>Civilians killed
+              <input type="number" name="civilians_killed" min="0" step="1">
+            </label>
+            <label>Civilians injured
+              <input type="number" name="civilians_injured" min="0" step="1">
+            </label>
+          </div>
+
+          <button type="submit">Submit incident</button>
+          <p class="error" data-role="submit-error" hidden></p>
+          <p class="success" data-role="submit-success" hidden>Submitted. A reviewer will verify it in the sheet.</p>
+        </form>
+      </div>
+    </div>
+  </section>
+</template>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

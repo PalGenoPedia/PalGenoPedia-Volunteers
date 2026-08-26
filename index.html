@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>PalGenoPedia Volunteer Portal — Sign In</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="config.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+<main class="center-page">
+  <div class="card">
+    <h1>Volunteer Portal</h1>
+    <p class="muted">Sign in with your Google account to document an incident.</p>
+    <div id="g_id_signin_container"></div>
+    <p id="signin-error" class="error" hidden></p>
+  </div>
+</main>
+
+<script>
+  function handleCredentialResponse(response) {
+    sessionStorage.setItem("portal_id_token", response.credential);
+    window.location.href = "app.html";
+  }
+
+  window.onload = function () {
+    google.accounts.id.initialize({
+      client_id: window.PORTAL_CONFIG.GOOGLE_CLIENT_ID,
+      callback: handleCredentialResponse,
+    });
+    google.accounts.id.renderButton(
+      document.getElementById("g_id_signin_container"),
+      { theme: "outline", size: "large", text: "signin_with" }
+    );
+
+    if (new URLSearchParams(window.location.search).get("denied") === "1") {
+      const errorEl = document.getElementById("signin-error");
+      errorEl.hidden = false;
+      errorEl.textContent = "That Google account is not on the approved volunteer list. Contact a coordinator to be added.";
+    }
+  };
+</script>
+</body>
+</html>
