@@ -28,7 +28,7 @@ const SPREADSHEETS = {
 // Spreadsheet + tab holding the volunteer allow-list. One email per row in
 // column A. A coordinator maintains this directly. Create this spreadsheet
 // once, share it with nobody but coordinators, and fill in its ID below.
-const VOLUNTEERS_SPREADSHEET_ID = "REPLACE_WITH_VOLUNTEERS_SPREADSHEET_ID";
+const VOLUNTEERS_SPREADSHEET_ID = "1eAaU37vq3EszdzsHWoa-ln0DNouQX3It0-VkWK1vUss";
 const VOLUNTEERS_SHEET_NAME = "Volunteers";
 
 // Google OAuth client ID the frontend signs in with (config.js). ID tokens
