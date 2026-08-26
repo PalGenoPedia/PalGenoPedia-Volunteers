@@ -6,7 +6,7 @@ window.PORTAL_CONFIG = {
   API_URL: "https://script.google.com/macros/s/REPLACE_WITH_DEPLOYMENT_ID/exec",
 
   // OAuth 2.0 Client ID from Google Cloud Console (Web application type).
-  GOOGLE_CLIENT_ID: "REPLACE_WITH_CLIENT_ID.apps.googleusercontent.com",
+  GOOGLE_CLIENT_ID: "1017482285870-q0dl90l30asn736kad0u7qbucopj209a.apps.googleusercontent.com",
 
   // Sections live in the MVP. Extend as later phases ship (see README).
   SECTIONS: [

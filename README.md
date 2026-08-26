@@ -60,17 +60,28 @@ robots.txt               Disallow: / — keeps this subdomain out of search enti
 
 ### 2. Apps Script backend
 
-- In the target Google Sheet (or a bound script on one of the incident
-  sheets), create a new Apps Script project and paste in `apps-script/Code.gs`
-  and `apps-script/appsscript.json` (or use `clasp push` — see below).
-- Add a `Volunteers` sheet/tab with one column of allowed volunteer emails —
-  this is the allow-list a coordinator maintains directly.
-- Set the `SPREADSHEETS` mapping at the top of `Code.gs` to point each
-  section (`hospitals` for MVP) at its spreadsheet ID and tab name — mirror
-  whatever `tools/apps-script/github-sync-fix.gs` already uses in the main
-  repo, do not invent new IDs.
+- In a new Google Sheet ("Volunteer Portal — Admin" or similar — separate
+  from the four content spreadsheets), create the Apps Script project (
+  Extensions → Apps Script) and paste in `apps-script/Code.gs` and
+  `apps-script/appsscript.json` (or use `clasp push` — see below).
+- In that same admin spreadsheet, add a `Volunteers` tab with one column of
+  allowed volunteer emails, one per row — this is the allow-list a
+  coordinator maintains directly. Put its spreadsheet ID into
+  `VOLUNTEERS_SPREADSHEET_ID` in `Code.gs`.
+- `SPREADSHEETS.hospitals` in `Code.gs` already points at the real Hospitals
+  workbook (`1JUJTf0sdPo4o-DluzuwjMOMAc6Fhe4k9kFv-UIXyMg4`, tabs
+  `Hospital_facilities` / `Hospital_incidents`) per `PIPELINE.md` in the main
+  repo — do not repoint these to a different spreadsheet.
+- **Add one new column to `Hospital_incidents`:** `submission_id`. This is
+  additive (see Data contract below) — it doesn't touch anything
+  `build_records.py` reads.
+- The Apps Script project needs edit access to both the admin spreadsheet
+  and the Hospitals workbook — either run it under a Google account that
+  already has editor access to both, or have the workbook owner share it
+  with whichever account owns the script.
 - Deploy → New deployment → **Web app** → Execute as: **Me** → Who has
-  access: **Anyone**. Copy the deployment URL into `config.js`.
+  access: **Anyone** (not "Anyone with Google account" — see architecture
+  note above for why). Copy the deployment URL into `config.js`.
 - Optional local dev: `npm i -g @google/clasp`, `clasp login`, `clasp clone
   <scriptId>` into `apps-script/`, then `clasp push` to sync edits.
 
@@ -83,13 +94,24 @@ robots.txt               Disallow: / — keeps this subdomain out of search enti
 
 ## Data contract
 
-Matches `PIPELINE.md` in the main repo exactly — see column mapping in
-`apps-script/Code.gs` (`COLUMN_MAP`). The backend never invents an
-`id`/`incident_id`; it appends a blank row and lets the sheet's own formula
-derive those, exactly like a manually typed row. It does write a
-`submission_id` (UUID, generated client-side) into a dedicated column so a
-reviewer can trace a row back to its portal submission even after
-`incident_id` shifts.
+Matches `PIPELINE.md` in the main repo exactly — see the `INC` column map in
+`apps-script/Code.gs`. Facilities live in `Hospital_facilities`, incidents in
+`Hospital_incidents` (same workbook, separate tabs); a new incident is
+appended to the incidents tab, matched to its facility by `facility_name`.
+
+**Matching is by name, never by id.** `PIPELINE.md` documents that
+`id`/`incident_id`/`facility_id` are formulas that count non-blank rows and
+are not stable — deleting one row shifts every id below it, which already
+repointed 25 hospital URLs once. The portal reads/writes `facility_name` as
+the join key everywhere; `facility_id` is copied onto a new row only as a
+best-effort convenience value, never used to look anything up.
+
+The backend never invents an `id`/`incident_id` for a new row either — it
+appends a blank row and lets the sheet's own formula derive those, exactly
+like a manually typed row. It does write a `submission_id` (UUID, generated
+client-side) into a dedicated column so a reviewer can trace a row back to
+its portal submission even after `incident_id` shifts. That column must be
+added to `Hospital_incidents` once, manually, before this goes live.
 
 ## Explicitly out of scope for this MVP
 

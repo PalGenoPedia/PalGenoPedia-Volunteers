@@ -6,48 +6,57 @@
  * purpose — see README) but independently, in every request, by verifying
  * the Google ID token the frontend sends and checking it against the
  * Volunteers allow-list sheet.
+ *
+ * Facility matching uses `facility_name`, never `facility_id`/`id`. Per
+ * PIPELINE.md in the main repo, those id columns are formulas that count
+ * non-blank rows and are NOT stable — deleting one row shifts every id below
+ * it. Names are the real key the rest of the site is built on.
  */
 
 // --- Configuration ---------------------------------------------------------
 
-// One entry per portal section. spreadsheetId/sheetName must point at the
-// exact same spreadsheet + tab tools/build_records.py already reads for that
-// section — never invent a new one. Fill these in from the main repo's
-// PIPELINE.md / tools/apps-script/github-sync-fix.gs before deploying.
+// One entry per portal section, mirroring PIPELINE.md's spreadsheet table
+// exactly. Never invent a new spreadsheet ID here — copy from PIPELINE.md.
 const SPREADSHEETS = {
   hospitals: {
-    spreadsheetId: "REPLACE_WITH_HOSPITALS_SPREADSHEET_ID",
-    sheetName: "Incidents",
+    spreadsheetId: "1JUJTf0sdPo4o-DluzuwjMOMAc6Fhe4k9kFv-UIXyMg4",
+    facilitiesSheet: "Hospital_facilities",
+    incidentsSheet: "Hospital_incidents",
   },
 };
 
 // Spreadsheet + tab holding the volunteer allow-list. One email per row in
-// column A. A coordinator maintains this directly.
+// column A. A coordinator maintains this directly. Create this spreadsheet
+// once, share it with nobody but coordinators, and fill in its ID below.
 const VOLUNTEERS_SPREADSHEET_ID = "REPLACE_WITH_VOLUNTEERS_SPREADSHEET_ID";
 const VOLUNTEERS_SHEET_NAME = "Volunteers";
 
 // Google OAuth client ID the frontend signs in with (config.js). ID tokens
 // are only accepted if their `aud` claim matches this.
-const OAUTH_CLIENT_ID = "REPLACE_WITH_CLIENT_ID.apps.googleusercontent.com";
+const OAUTH_CLIENT_ID = "1017482285870-q0dl90l30asn736kad0u7qbucopj209a.apps.googleusercontent.com";
 
-// Column mapping — must match PIPELINE.md's incident schema exactly so a
-// submitted row is indistinguishable from a manually typed one. Adjust the
-// header names on the right if a sheet's actual headers differ.
-const COLUMN_MAP = {
-  starting_date: "starting_date",
-  ending_date: "ending_date",
-  attack_type: "attack_type",
+// Facilities-tab headers.
+const FACILITY_NAME_COL = "name";
+
+// Incidents-tab headers — must match PIPELINE.md's incident schema exactly
+// so a submitted row is indistinguishable from a manually typed one.
+const INC = {
+  facilityName: "facility_name",
+  facilityId: "facility_id", // best-effort only, copied from the facilities tab if present — never matched on
+  startingDate: "starting_date",
+  endingDate: "ending_date",
+  attackType: "attack_type",
   description: "full_discription", // sic — matches the live (misspelled) header
-  source_url_1: "source_url_1",
-  source_url_2: "source_url_2",
-  civilians_killed: "civilians_killed",
-  civilians_injured: "civilians_injured",
-  added_by: "added_by",
-  submission_id: "submission_id",
+  sourceUrl1: "source_url_1",
+  sourceUrl2: "source_url_2",
+  civiliansKilled: "civilians_killed",
+  civiliansInjured: "civilians_injured",
+  addedBy: "added_by",
+  // Additive column, not in PIPELINE.md's schema — add a `submission_id`
+  // header to the incidents tab so reviewers can trace a row back to its
+  // portal submission even after incident_id shifts under it later.
+  submissionId: "submission_id",
 };
-
-const FACILITY_NAME_COLUMN = "facility_name"; // adjust to the real header
-const FACILITY_ID_COLUMN = "facility_id"; // adjust to the real header, or reuse facility_name if there's no separate id
 
 // --- Entry points ------------------------------------------------------
 
@@ -128,36 +137,47 @@ function getAllowListEmails() {
 // --- Reads ------------------------------------------------------------
 
 function listFacilities(sectionId) {
-  const { rows, headers } = readSection(sectionId);
-  const nameIdx = headers.indexOf(FACILITY_NAME_COLUMN);
-  const idIdx = headers.indexOf(FACILITY_ID_COLUMN);
+  const config = requireSectionConfig(sectionId);
+  const facilitiesSheet = SpreadsheetApp.openById(config.spreadsheetId).getSheetByName(config.facilitiesSheet);
+  const facilityValues = facilitiesSheet.getDataRange().getValues();
+  const facilityHeaders = facilityValues[0].map((h) => String(h).trim());
+  const nameIdx = facilityHeaders.indexOf(FACILITY_NAME_COL);
   if (nameIdx === -1) throw new PortalError("config_error", "Facility name column not found.");
 
+  const names = facilityValues
+    .slice(1)
+    .map((row) => String(row[nameIdx] || "").trim())
+    .filter((name) => name);
+
+  const counts = countIncidentsByFacility(config);
+
+  return names
+    .map((name) => ({ id: name, name: name, incidentCount: counts.get(name) || 0 }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function countIncidentsByFacility(config) {
+  const { rows, headers } = readIncidentsSheet(config);
+  const nameIdx = headers.indexOf(INC.facilityName);
   const counts = new Map();
   for (const row of rows) {
     const name = String(row[nameIdx] || "").trim();
     if (!name) continue;
-    const id = idIdx !== -1 ? String(row[idIdx] || "").trim() : name;
-    const key = id || name;
-    if (!counts.has(key)) counts.set(key, { id: key, name: name, incidentCount: 0 });
-    counts.get(key).incidentCount++;
+    counts.set(name, (counts.get(name) || 0) + 1);
   }
-  return Array.from(counts.values()).sort((a, b) => a.name.localeCompare(b.name));
+  return counts;
 }
 
-function listIncidents(sectionId, facilityId) {
-  const { rows, headers } = readSection(sectionId);
-  const nameIdx = headers.indexOf(FACILITY_NAME_COLUMN);
-  const idIdx = headers.indexOf(FACILITY_ID_COLUMN);
-  const dateIdx = headers.indexOf(COLUMN_MAP.starting_date);
-  const typeIdx = headers.indexOf(COLUMN_MAP.attack_type);
-  const descIdx = headers.indexOf(COLUMN_MAP.description);
+function listIncidents(sectionId, facilityName) {
+  const config = requireSectionConfig(sectionId);
+  const { rows, headers } = readIncidentsSheet(config);
+  const nameIdx = headers.indexOf(INC.facilityName);
+  const dateIdx = headers.indexOf(INC.startingDate);
+  const typeIdx = headers.indexOf(INC.attackType);
+  const descIdx = headers.indexOf(INC.description);
 
   return rows
-    .filter((row) => {
-      const key = idIdx !== -1 ? String(row[idIdx] || "").trim() : String(row[nameIdx] || "").trim();
-      return key === facilityId;
-    })
+    .filter((row) => String(row[nameIdx] || "").trim() === facilityName)
     .map((row) => ({
       date: formatDate(row[dateIdx]),
       attackType: typeIdx !== -1 ? String(row[typeIdx] || "") : "",
@@ -165,52 +185,56 @@ function listIncidents(sectionId, facilityId) {
     }));
 }
 
-function readSection(sectionId) {
-  const config = SPREADSHEETS[sectionId];
-  if (!config) throw new PortalError("unknown_section", "Unknown section: " + sectionId);
-  const sheet = SpreadsheetApp.openById(config.spreadsheetId).getSheetByName(config.sheetName);
+function readIncidentsSheet(config) {
+  const sheet = SpreadsheetApp.openById(config.spreadsheetId).getSheetByName(config.incidentsSheet);
   const values = sheet.getDataRange().getValues();
   const headers = values[0].map((h) => String(h).trim());
   return { headers: headers, rows: values.slice(1) };
 }
 
+function requireSectionConfig(sectionId) {
+  const config = SPREADSHEETS[sectionId];
+  if (!config) throw new PortalError("unknown_section", "Unknown section: " + sectionId);
+  return config;
+}
+
 // --- Writes -----------------------------------------------------------
 
 function submitIncident(body, email) {
-  const config = SPREADSHEETS[body.section];
-  if (!config) throw new PortalError("unknown_section", "Unknown section: " + body.section);
-
+  const config = requireSectionConfig(body.section);
   const fields = body.fields || {};
   validateSubmission(fields);
 
-  const sheet = SpreadsheetApp.openById(config.spreadsheetId).getSheetByName(config.sheetName);
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map((h) => String(h).trim());
+  const facilityName = body.facility;
+  if (!facilityName) throw new PortalError("validation_failed", "Missing facility.");
+
+  const incidentsSheet = SpreadsheetApp.openById(config.spreadsheetId).getSheetByName(config.incidentsSheet);
+  const headers = incidentsSheet.getRange(1, 1, 1, incidentsSheet.getLastColumn()).getValues()[0].map((h) => String(h).trim());
 
   // Append a blank row and let the sheet's own id/incident_id formulas fill
   // themselves in, exactly like a manually typed row — never write those
   // columns directly (see PIPELINE.md).
   const newRow = new Array(headers.length).fill("");
-
   const setByHeader = (headerName, value) => {
     const idx = headers.indexOf(headerName);
     if (idx !== -1) newRow[idx] = value;
   };
 
-  setByHeader(FACILITY_NAME_COLUMN, getFacilityName(config, body.facility));
-  if (headers.indexOf(FACILITY_ID_COLUMN) !== -1) setByHeader(FACILITY_ID_COLUMN, body.facility);
-  setByHeader(COLUMN_MAP.starting_date, fields.starting_date || "");
-  setByHeader(COLUMN_MAP.ending_date, fields.ending_date || "");
-  setByHeader(COLUMN_MAP.attack_type, fields.attack_type || "");
-  setByHeader(COLUMN_MAP.description, fields.description || "");
-  setByHeader(COLUMN_MAP.source_url_1, fields.source_url_1 || "");
-  setByHeader(COLUMN_MAP.source_url_2, fields.source_url_2 || "");
-  setByHeader(COLUMN_MAP.civilians_killed, fields.civilians_killed || "");
-  setByHeader(COLUMN_MAP.civilians_injured, fields.civilians_injured || "");
-  setByHeader(COLUMN_MAP.added_by, email);
-  setByHeader(COLUMN_MAP.submission_id, body.submissionId || "");
+  setByHeader(INC.facilityName, facilityName);
+  setByHeader(INC.facilityId, lookupFacilityId(config, facilityName)); // best-effort, not used for matching
+  setByHeader(INC.startingDate, fields.starting_date || "");
+  setByHeader(INC.endingDate, fields.ending_date || "");
+  setByHeader(INC.attackType, fields.attack_type || "");
+  setByHeader(INC.description, fields.description || "");
+  setByHeader(INC.sourceUrl1, fields.source_url_1 || "");
+  setByHeader(INC.sourceUrl2, fields.source_url_2 || "");
+  setByHeader(INC.civiliansKilled, fields.civilians_killed || "");
+  setByHeader(INC.civiliansInjured, fields.civilians_injured || "");
+  setByHeader(INC.addedBy, email);
+  setByHeader(INC.submissionId, body.submissionId || "");
 
   try {
-    sheet.appendRow(newRow);
+    incidentsSheet.appendRow(newRow);
   } catch (err) {
     notifyCoordinatorOfFailure(email, body, err);
     throw new PortalError("append_failed", "Could not save the incident. Please try again or contact a coordinator.");
@@ -220,19 +244,20 @@ function submitIncident(body, email) {
   return { ok: true };
 }
 
-function getFacilityName(config, facilityId) {
-  const sheet = SpreadsheetApp.openById(config.spreadsheetId).getSheetByName(config.sheetName);
-  const values = sheet.getDataRange().getValues();
+// Best-effort only — per PIPELINE.md this id is a formula and can be stale
+// the moment it's read. Never used to look anything up, only carried along
+// for a reviewer's convenience.
+function lookupFacilityId(config, facilityName) {
+  const facilitiesSheet = SpreadsheetApp.openById(config.spreadsheetId).getSheetByName(config.facilitiesSheet);
+  const values = facilitiesSheet.getDataRange().getValues();
   const headers = values[0].map((h) => String(h).trim());
-  const nameIdx = headers.indexOf(FACILITY_NAME_COLUMN);
-  const idIdx = headers.indexOf(FACILITY_ID_COLUMN);
+  const nameIdx = headers.indexOf(FACILITY_NAME_COL);
+  const idIdx = headers.indexOf("id");
+  if (idIdx === -1) return "";
   for (const row of values.slice(1)) {
-    const key = idIdx !== -1 ? String(row[idIdx] || "").trim() : String(row[nameIdx] || "").trim();
-    if (key === facilityId) return String(row[nameIdx] || "");
+    if (String(row[nameIdx] || "").trim() === facilityName) return row[idIdx];
   }
-  // Facility not already present in the sheet — fall back to the id itself
-  // rather than failing the submission outright.
-  return facilityId;
+  return "";
 }
 
 function validateSubmission(fields) {
@@ -263,8 +288,8 @@ function validateSubmission(fields) {
 
 function logSubmission(email, body) {
   try {
-    const sheet = SpreadsheetApp.openById(VOLUNTEERS_SPREADSHEET_ID).getSheetByName("SubmissionLog")
-      || SpreadsheetApp.openById(VOLUNTEERS_SPREADSHEET_ID).insertSheet("SubmissionLog");
+    const ss = SpreadsheetApp.openById(VOLUNTEERS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("SubmissionLog") || ss.insertSheet("SubmissionLog");
     sheet.appendRow([new Date(), email, body.section, body.facility, body.submissionId]);
   } catch (err) {
     // Audit logging is best-effort; never let it fail the actual submission.
