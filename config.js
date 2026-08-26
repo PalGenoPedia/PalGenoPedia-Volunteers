@@ -3,7 +3,7 @@
 // the allow-list check inside Code.gs, not secrecy of these values).
 window.PORTAL_CONFIG = {
   // Apps Script Web App deployment URL ("Deploy > New deployment > Web app").
-  API_URL: "https://script.google.com/macros/s/REPLACE_WITH_DEPLOYMENT_ID/exec",
+  API_URL: "https://script.google.com/macros/s/AKfycbz4TbX7MqgOFaN0CHUYith0ZSkc7Yv5disnMmq2GDf0EJSxTlnUr_iNTNEzN61magOM_A/exec",
 
   // OAuth 2.0 Client ID from Google Cloud Console (Web application type).
   GOOGLE_CLIENT_ID: "1017482285870-q0dl90l30asn736kad0u7qbucopj209a.apps.googleusercontent.com",
