@@ -42,9 +42,10 @@ const SPREADSHEETS = {
   },
 };
 
-// Spreadsheet + tab holding the volunteer allow-list. One email per row in
-// column A. A coordinator maintains this directly. Create this spreadsheet
-// once, share it with nobody but coordinators, and fill in its ID below.
+// Spreadsheet + tab holding the volunteer allow-list. Column A: email,
+// column B: role ("editor" or blank/"volunteer"). A coordinator maintains
+// this directly — add a row to grant access, set column B to "editor" to
+// let that person also edit existing incidents, not just submit new ones.
 const VOLUNTEERS_SPREADSHEET_ID = "1eAaU37vq3EszdzsHWoa-ln0DNouQX3It0-VkWK1vUss";
 const VOLUNTEERS_SHEET_NAME = "Volunteers";
 
@@ -73,17 +74,20 @@ const INC = {
   // header to the incidents tab so reviewers can trace a row back to its
   // portal submission even after incident_id shifts under it later.
   submissionId: "submission_id",
+  // Additive, optional — filled in only on an edit, never on first submit.
+  lastEditedBy: "last_edited_by",
+  lastEditedAt: "last_edited_at",
 };
 
 // --- Entry points ------------------------------------------------------
 
 function doGet(e) {
   return withErrorHandling(() => {
-    const email = requireVolunteer(e.parameter.token);
+    const volunteer = requireVolunteer(e.parameter.token);
     const action = e.parameter.action;
 
     if (action === "whoami") {
-      return jsonResponse({ email: email });
+      return jsonResponse({ email: volunteer.email, isEditor: volunteer.isEditor });
     }
     if (action === "facilities") {
       return jsonResponse({ facilities: listFacilities(e.parameter.section) });
@@ -100,26 +104,32 @@ function doGet(e) {
 function doPost(e) {
   return withErrorHandling(() => {
     const body = JSON.parse(e.postData.contents);
-    const email = requireVolunteer(body.token);
+    const volunteer = requireVolunteer(body.token);
 
-    if (body.action !== "submit_incident") {
-      return jsonResponse({ error: "unknown_action" });
+    if (body.action === "submit_incident") {
+      return jsonResponse(submitIncident(body, volunteer.email));
     }
-    return jsonResponse(submitIncident(body, email));
+    if (body.action === "update_incident") {
+      return jsonResponse(updateIncident(body, volunteer));
+    }
+    return jsonResponse({ error: "unknown_action" });
   });
 }
 
 // --- Auth ------------------------------------------------------------------
 
+// Returns { email, isEditor }. Throws not_approved_volunteer for anyone not
+// on the allow-list at all, editor or not.
 function requireVolunteer(idToken) {
   if (!idToken) throw new PortalError("not_approved_volunteer", "Missing token.");
 
   const email = verifyIdToken(idToken);
-  const allowList = getAllowListEmails();
-  if (allowList.indexOf(email.toLowerCase()) === -1) {
+  const roles = getVolunteerRoles();
+  const role = roles.get(email.toLowerCase());
+  if (role === undefined) {
     throw new PortalError("not_approved_volunteer", email + " is not an approved volunteer.");
   }
-  return email;
+  return { email: email, isEditor: role === "editor" };
 }
 
 // Verifies a Google-issued ID token via Google's tokeninfo endpoint rather
@@ -143,12 +153,19 @@ function verifyIdToken(idToken) {
   return info.email;
 }
 
-function getAllowListEmails() {
+// Map<lowercased email, "editor" | "volunteer">. Column B blank or anything
+// other than "editor" (case-insensitive) counts as a plain volunteer.
+function getVolunteerRoles() {
   const sheet = SpreadsheetApp.openById(VOLUNTEERS_SPREADSHEET_ID).getSheetByName(VOLUNTEERS_SHEET_NAME);
-  const values = sheet.getRange(1, 1, sheet.getLastRow(), 1).getValues();
-  return values
-    .map((row) => String(row[0]).trim().toLowerCase())
-    .filter((v) => v && v.includes("@"));
+  const values = sheet.getRange(1, 1, sheet.getLastRow(), 2).getValues();
+  const roles = new Map();
+  for (const row of values) {
+    const email = String(row[0] || "").trim().toLowerCase();
+    if (!email || !email.includes("@")) continue;
+    const role = String(row[1] || "").trim().toLowerCase() === "editor" ? "editor" : "volunteer";
+    roles.set(email, role);
+  }
+  return roles;
 }
 
 // --- Reads ------------------------------------------------------------
@@ -190,16 +207,35 @@ function listIncidents(sectionId, facilityName) {
   const { rows, headers } = readIncidentsSheet(config);
   const nameIdx = headers.indexOf(INC.facilityName);
   const dateIdx = headers.indexOf(INC.startingDate);
+  const endIdx = headers.indexOf(INC.endingDate);
   const typeIdx = headers.indexOf(INC.attackType);
   const descIdx = headers.indexOf(INC.description);
+  const src1Idx = headers.indexOf(INC.sourceUrl1);
+  const src2Idx = headers.indexOf(INC.sourceUrl2);
+  const killedIdx = headers.indexOf(INC.civiliansKilled);
+  const injuredIdx = headers.indexOf(INC.civiliansInjured);
 
-  return rows
-    .filter((row) => String(row[nameIdx] || "").trim() === facilityName)
-    .map((row) => ({
+  const col = (row, idx) => (idx !== -1 ? String(row[idx] || "") : "");
+
+  const result = [];
+  rows.forEach((row, i) => {
+    if (String(row[nameIdx] || "").trim() !== facilityName) return;
+    result.push({
+      // Sheet row number (1-indexed, header is row 1). Round-tripped back
+      // by an editor's update request to identify which row to overwrite —
+      // never persisted, never used as a stable id across requests.
+      row: i + 2,
       date: formatDate(row[dateIdx]),
-      attackType: typeIdx !== -1 ? String(row[typeIdx] || "") : "",
-      description: descIdx !== -1 ? String(row[descIdx] || "") : "",
-    }));
+      endingDate: endIdx !== -1 ? formatDate(row[endIdx]) : "",
+      attackType: col(row, typeIdx),
+      description: col(row, descIdx),
+      sourceUrl1: col(row, src1Idx),
+      sourceUrl2: col(row, src2Idx),
+      civiliansKilled: col(row, killedIdx),
+      civiliansInjured: col(row, injuredIdx),
+    });
+  });
+  return result;
 }
 
 function readIncidentsSheet(config) {
@@ -258,6 +294,61 @@ function submitIncident(body, email) {
   }
 
   logSubmission(email, body);
+  return { ok: true };
+}
+
+// Overwrites an existing incident row in place. Restricted to volunteers
+// with the "editor" role. The row number came from a listIncidents() call
+// the client made earlier; before writing, re-read that row and confirm it
+// still belongs to the expected facility, so a row that shifted (someone
+// else inserted/deleted rows in between) fails loudly instead of silently
+// overwriting the wrong incident.
+function updateIncident(body, volunteer) {
+  if (!volunteer.isEditor) {
+    throw new PortalError("not_authorized", "Only approved editors can update existing incidents.");
+  }
+  const config = requireSectionConfig(body.section);
+  const fields = body.fields || {};
+  validateSubmission(fields);
+
+  const rowNumber = Number(body.row);
+  if (!rowNumber || rowNumber < 2) {
+    throw new PortalError("validation_failed", "Missing or invalid row reference.");
+  }
+
+  const incidentsSheet = SpreadsheetApp.openById(config.spreadsheetId).getSheetByName(config.incidentsSheet);
+  const headers = incidentsSheet.getRange(1, 1, 1, incidentsSheet.getLastColumn()).getValues()[0].map((h) => String(h).trim());
+  const nameIdx = headers.indexOf(INC.facilityName);
+
+  const existingRow = incidentsSheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
+  if (nameIdx === -1 || String(existingRow[nameIdx] || "").trim() !== body.facility) {
+    throw new PortalError(
+      "row_mismatch",
+      "This incident has changed since you loaded it (maybe another edit landed first). Please refresh and try again."
+    );
+  }
+
+  const setCell = (headerName, value) => {
+    const idx = headers.indexOf(headerName);
+    if (idx !== -1) incidentsSheet.getRange(rowNumber, idx + 1).setValue(value);
+  };
+
+  setCell(INC.startingDate, fields.starting_date || "");
+  setCell(INC.endingDate, fields.ending_date || "");
+  setCell(INC.attackType, fields.attack_type || "");
+  setCell(INC.description, fields.description || "");
+  setCell(INC.sourceUrl1, fields.source_url_1 || "");
+  setCell(INC.sourceUrl2, fields.source_url_2 || "");
+  setCell(INC.civiliansKilled, fields.civilians_killed || "");
+  setCell(INC.civiliansInjured, fields.civilians_injured || "");
+  setCell(INC.lastEditedBy, volunteer.email);
+  setCell(INC.lastEditedAt, new Date());
+
+  logSubmission(volunteer.email, {
+    section: body.section,
+    facility: body.facility,
+    submissionId: "(edit of row " + rowNumber + ")",
+  });
   return { ok: true };
 }
 

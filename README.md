@@ -68,18 +68,21 @@ robots.txt               Disallow: / — keeps this subdomain out of search enti
   from the four content spreadsheets), create the Apps Script project (
   Extensions → Apps Script) and paste in `apps-script/Code.gs` and
   `apps-script/appsscript.json` (or use `clasp push` — see below).
-- In that same admin spreadsheet, add a `Volunteers` tab with one column of
-  allowed volunteer emails, one per row — this is the allow-list a
-  coordinator maintains directly. Put its spreadsheet ID into
+- In that same admin spreadsheet, add a `Volunteers` tab: column A is the
+  allowed volunteer's email, one per row; column B is their role — leave
+  blank (or `volunteer`) for someone who can only submit new incidents, or
+  set `editor` for someone who can also edit incidents already in the
+  sheet. A coordinator maintains this directly. Put its spreadsheet ID into
   `VOLUNTEERS_SPREADSHEET_ID` in `Code.gs`.
 - `SPREADSHEETS` in `Code.gs` already points at the four real workbooks
   (Hospitals, Universities, Schools, Religious Sites) per `PIPELINE.md` in
   the main repo — do not repoint these to a different spreadsheet.
-- **Add one new column to each of the four incidents tabs**
+- **Add new columns to each of the four incidents tabs**
   (`Hospital_incidents`, `University_incidents`, `Schools_incidents`,
   `Religous_incidents` — note the missing "i", that's the real tab name):
-  `submission_id`. This is additive (see Data contract below) — it doesn't
-  touch anything `build_records.py` reads.
+  `submission_id`, `last_edited_by`, `last_edited_at`. All additive (see
+  Data contract below) — none of them touch anything `build_records.py`
+  reads.
 - The Apps Script project needs edit access to the admin spreadsheet and all
   four content workbooks — either run it under a Google account that already
   has editor access to all of them, or have each workbook shared with
@@ -119,6 +122,28 @@ client-side) into a dedicated column so a reviewer can trace a row back to
 its portal submission even after `incident_id` shifts. That column must be
 added to each of the four incidents tabs once, manually, before this goes
 live.
+
+## Editing existing incidents
+
+Volunteers with the `editor` role (set in column B of the `Volunteers` tab —
+see Setup above) get an **Edit** button on each incident in the facility
+detail view, alongside the passive duplicate-check list. It opens an inline
+form pre-filled with that incident's current values.
+
+The row to overwrite is identified by its sheet row number, captured when
+the incident list loaded. Before writing, the backend re-reads that row and
+confirms it still belongs to the expected facility — if it doesn't (e.g.
+someone else's edit or a manual row insert/deletion landed in between), the
+request fails with a clear "please refresh and try again" error instead of
+silently overwriting the wrong incident. `last_edited_by`/`last_edited_at`
+are stamped on every edit, alongside whatever `added_by` already says — an
+edit never touches `added_by`, `reviewed_by`, or the sheet's own
+`id`/`incident_id` formulas.
+
+Non-editor volunteers don't see the Edit button at all, and the backend
+rejects an `update_incident` request from a non-editor regardless
+(`error: "not_authorized"`) — the UI check is a convenience, not the
+actual boundary.
 
 ## Explicitly out of scope
 

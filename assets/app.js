@@ -21,7 +21,20 @@ let state = {
   facilities: [],
   currentFacility: null,
   incidents: [],
+  isEditor: false,
 };
+
+// Must match the <option> list in app.html's #incident-form exactly — the
+// edit form is built dynamically in JS and has no template of its own.
+const ATTACK_TYPES = [
+  "Airstrike",
+  "Shelling",
+  "Siege / access denial",
+  "Raid / incursion",
+  "Sniper fire",
+  "Detention of staff or patients",
+  "Other",
+];
 
 async function apiGet(params) {
   const url = new URL(CONFIG.API_URL);
@@ -160,10 +173,116 @@ function renderIncidentList(incidents) {
   for (const incident of incidents) {
     const row = document.createElement("div");
     row.className = "incident-row";
-    row.innerHTML = `<div class="date">${escapeHtml(incident.date)} — ${escapeHtml(incident.attackType || "")}</div>
+
+    const summary = document.createElement("div");
+    summary.innerHTML = `<div class="date">${escapeHtml(incident.date)} — ${escapeHtml(incident.attackType || "")}</div>
       <div class="small">${escapeHtml(truncate(incident.description || "", 160))}</div>`;
+    row.appendChild(summary);
+
+    if (state.isEditor) {
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "link-btn small";
+      editBtn.textContent = "Edit";
+      editBtn.addEventListener("click", () => startEditIncident(row, incident));
+      row.appendChild(editBtn);
+    }
+
     listEl.appendChild(row);
   }
+}
+
+// Replaces one incident row with an inline, pre-filled edit form. Editor
+// role only (see state.isEditor / the "Edit" button in renderIncidentList).
+function startEditIncident(rowEl, incident) {
+  const facility = state.currentFacility;
+  rowEl.innerHTML = "";
+
+  const form = document.createElement("form");
+  form.className = "edit-form";
+
+  const field = (label, name, type, value) => {
+    const wrapper = document.createElement("label");
+    wrapper.textContent = label;
+    const input = document.createElement("input");
+    input.type = type;
+    input.name = name;
+    input.value = value || "";
+    wrapper.appendChild(input);
+    form.appendChild(wrapper);
+    return input;
+  };
+
+  field("Date", "starting_date", "date", incident.date).required = true;
+  field("End date", "ending_date", "date", incident.endingDate);
+
+  const typeLabel = document.createElement("label");
+  typeLabel.textContent = "Attack type";
+  const typeSelect = document.createElement("select");
+  typeSelect.name = "attack_type";
+  typeSelect.required = true;
+  for (const t of ATTACK_TYPES) {
+    const opt = document.createElement("option");
+    opt.textContent = t;
+    if (t === incident.attackType) opt.selected = true;
+    typeSelect.appendChild(opt);
+  }
+  typeLabel.appendChild(typeSelect);
+  form.appendChild(typeLabel);
+
+  const descLabel = document.createElement("label");
+  descLabel.textContent = "Summary / full account";
+  const descArea = document.createElement("textarea");
+  descArea.name = "description";
+  descArea.rows = 4;
+  descArea.required = true;
+  descArea.value = incident.description || "";
+  descLabel.appendChild(descArea);
+  form.appendChild(descLabel);
+
+  field("Source URL", "source_url_1", "url", incident.sourceUrl1).required = true;
+  field("Additional source URL", "source_url_2", "url", incident.sourceUrl2);
+  field("Civilians killed", "civilians_killed", "number", incident.civiliansKilled);
+  field("Civilians injured", "civilians_injured", "number", incident.civiliansInjured);
+
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "submit";
+  saveBtn.textContent = "Save changes";
+  form.appendChild(saveBtn);
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "link-btn";
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.addEventListener("click", () => showFacilityDetail(facility));
+  form.appendChild(cancelBtn);
+
+  const errorEl = document.createElement("p");
+  errorEl.className = "error";
+  errorEl.hidden = true;
+  form.appendChild(errorEl);
+
+  form.addEventListener("submit", async (evt) => {
+    evt.preventDefault();
+    saveBtn.disabled = true;
+    errorEl.hidden = true;
+    try {
+      await apiPost({
+        action: "update_incident",
+        section: state.currentSection.id,
+        facility: facility.id,
+        row: incident.row,
+        fields: Object.fromEntries(new FormData(form).entries()),
+      });
+      showFacilityDetail(facility);
+    } catch (e) {
+      errorEl.hidden = false;
+      errorEl.textContent = e.message;
+      saveBtn.disabled = false;
+    }
+  });
+
+  rowEl.appendChild(form);
 }
 
 // --- Form / duplicate check -------------------------------------------
@@ -247,7 +366,8 @@ function truncate(str, n) {
 (async function init() {
   try {
     const data = await apiGet({ action: "whoami" });
-    document.getElementById("whoami").textContent = data.email || "";
+    state.isEditor = !!data.isEditor;
+    document.getElementById("whoami").textContent = data.email + (state.isEditor ? " (editor)" : "");
     showSections();
   } catch (e) {
     appEl.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
