@@ -67,6 +67,8 @@ const INC = {
   description: "full_discription", // sic — matches the live (misspelled) header
   sourceUrl1: "source_url_1",
   sourceUrl2: "source_url_2",
+  imageUrl: "image_url",
+  videoUrl: "video_url",
   civiliansKilled: "civilians_killed",
   civiliansInjured: "civilians_injured",
   addedBy: "added_by",
@@ -224,6 +226,8 @@ function listIncidents(sectionId, facilityName) {
   const descIdx = headers.indexOf(INC.description);
   const src1Idx = headers.indexOf(INC.sourceUrl1);
   const src2Idx = headers.indexOf(INC.sourceUrl2);
+  const imageIdx = headers.indexOf(INC.imageUrl);
+  const videoIdx = headers.indexOf(INC.videoUrl);
   const killedIdx = headers.indexOf(INC.civiliansKilled);
   const injuredIdx = headers.indexOf(INC.civiliansInjured);
 
@@ -243,6 +247,8 @@ function listIncidents(sectionId, facilityName) {
       description: col(row, descIdx),
       sourceUrl1: col(row, src1Idx),
       sourceUrl2: col(row, src2Idx),
+      imageUrl: col(row, imageIdx),
+      videoUrl: col(row, videoIdx),
       civiliansKilled: col(row, killedIdx),
       civiliansInjured: col(row, injuredIdx),
     });
@@ -311,6 +317,8 @@ function submitIncident(body, email) {
     setCell(INC.description, fields.description || "");
     setCell(INC.sourceUrl1, fields.source_url_1 || "");
     setCell(INC.sourceUrl2, fields.source_url_2 || "");
+    setCell(INC.imageUrl, fields.image_url || "");
+    setCell(INC.videoUrl, fields.video_url || "");
     setCell(INC.civiliansKilled, fields.civilians_killed || "");
     setCell(INC.civiliansInjured, fields.civilians_injured || "");
     setCell(INC.addedBy, email);
@@ -429,6 +437,8 @@ function updateIncident(body, volunteer) {
   setCell(INC.description, fields.description || "");
   setCell(INC.sourceUrl1, fields.source_url_1 || "");
   setCell(INC.sourceUrl2, fields.source_url_2 || "");
+  setCell(INC.imageUrl, fields.image_url || "");
+  setCell(INC.videoUrl, fields.video_url || "");
   setCell(INC.civiliansKilled, fields.civilians_killed || "");
   setCell(INC.civiliansInjured, fields.civilians_injured || "");
   setCell(INC.lastEditedBy, volunteer.email);
@@ -455,7 +465,7 @@ function lookupFacilityId(config, facilityName) {
 }
 
 function validateSubmission(fields) {
-  const required = ["starting_date", "attack_type", "description", "source_url_1"];
+  const required = ["starting_date", "attack_type", "source_url_1"];
   for (const field of required) {
     if (!fields[field] || String(fields[field]).trim() === "") {
       throw new PortalError("validation_failed", "Missing required field: " + field);
@@ -464,7 +474,7 @@ function validateSubmission(fields) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fields.starting_date)) {
     throw new PortalError("validation_failed", "starting_date must be YYYY-MM-DD.");
   }
-  for (const urlField of ["source_url_1", "source_url_2"]) {
+  for (const urlField of ["source_url_1", "source_url_2", "image_url", "video_url"]) {
     const value = fields[urlField];
     if (value && !/^https?:\/\/\S+$/.test(value)) {
       throw new PortalError("validation_failed", urlField + " must be a valid URL.");

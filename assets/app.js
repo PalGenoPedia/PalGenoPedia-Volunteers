@@ -236,13 +236,14 @@ function startEditIncident(rowEl, incident) {
   const descArea = document.createElement("textarea");
   descArea.name = "description";
   descArea.rows = 4;
-  descArea.required = true;
   descArea.value = incident.description || "";
   descLabel.appendChild(descArea);
   form.appendChild(descLabel);
 
   field("Source URL", "source_url_1", "url", incident.sourceUrl1).required = true;
   field("Additional source URL", "source_url_2", "url", incident.sourceUrl2);
+  field("Image URL", "image_url", "url", incident.imageUrl);
+  field("Video URL", "video_url", "url", incident.videoUrl);
   field("Civilians killed", "civilians_killed", "number", incident.civiliansKilled);
   field("Civilians injured", "civilians_injured", "number", incident.civiliansInjured);
 
