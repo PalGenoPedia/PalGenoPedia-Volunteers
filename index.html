@@ -10,14 +10,60 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
-<main class="center-page">
-  <div class="card">
-    <h1>Volunteer Portal</h1>
-    <p class="muted">Sign in with your Google account to document an incident.</p>
-    <div id="g_id_signin_container"></div>
-    <p id="signin-error" class="error" hidden></p>
-  </div>
-</main>
+<div class="landing">
+  <header class="landing-header">
+    <h1>PalGenoPedia</h1>
+    <p class="landing-tagline">Volunteer Contribution Portal</p>
+  </header>
+
+  <main class="landing-main">
+    <section class="landing-about">
+      <h2>About this project</h2>
+      <p>
+        PalGenoPedia documents incidents affecting civilian infrastructure —
+        hospitals, universities, schools, and religious sites — each entry
+        sourced, dated, and reviewed before publication. This portal is how
+        approved volunteers add new, sourced incidents directly to the
+        underlying records, instead of editing the spreadsheets by hand.
+      </p>
+
+      <h3>What happens when you sign in</h3>
+      <ol class="landing-steps">
+        <li>Pick a section below to work in.</li>
+        <li>See every facility in that section with its current incident count.</li>
+        <li>Open a facility and review its existing incidents, sorted by date — this is the duplicate check.</li>
+        <li>Fill in the new incident: date, attack type, sourced account, casualties.</li>
+        <li>Submit — it's added straight to the same sheet reviewers already use, with your account recorded as the submitter.</li>
+      </ol>
+
+      <h3>Main sections</h3>
+      <div class="landing-parts">
+        <span class="part-chip">Hospitals</span>
+        <span class="part-chip">Universities</span>
+        <span class="part-chip">Schools</span>
+        <span class="part-chip">Religious Sites</span>
+      </div>
+    </section>
+
+    <section class="card signin-card">
+      <h2>Volunteer sign-in</h2>
+      <p class="muted">Sign in with your Google account to document an incident.</p>
+      <div id="g_id_signin_container"></div>
+      <p id="signin-error" class="error" hidden></p>
+      <p class="muted small landing-contact">
+        Not yet an approved volunteer? Email
+        <a href="mailto:contact@palgenopedia.com">contact@palgenopedia.com</a>
+        to request access.
+      </p>
+    </section>
+  </main>
+
+  <footer class="landing-footer">
+    <p class="muted small">
+      Questions about contributing? <a href="mailto:contact@palgenopedia.com">contact@palgenopedia.com</a>
+    </p>
+  </footer>
+</div>
 
 <script>
   function handleCredentialResponse(response) {

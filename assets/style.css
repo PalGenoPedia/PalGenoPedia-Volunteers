@@ -38,6 +38,60 @@ body {
   text-align: center;
 }
 
+.landing {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 3rem;
+}
+
+.landing-header { margin-bottom: 2rem; }
+.landing-header h1 { margin: 0; font-size: 2rem; }
+.landing-tagline { margin: 0.25rem 0 0; color: var(--muted); font-size: 1.1em; }
+
+.landing-main {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 2.5rem;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .landing-main { grid-template-columns: 1fr; }
+}
+
+.landing-about h2 { margin-top: 0; }
+.landing-about h3 { margin-bottom: 0.5rem; }
+.landing-about p { line-height: 1.6; }
+.landing-steps { line-height: 1.7; padding-left: 1.25rem; }
+
+.landing-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.part-chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.9em;
+}
+
+.signin-card {
+  max-width: none;
+  position: sticky;
+  top: 2rem;
+}
+.signin-card h2 { margin-top: 0; }
+.landing-contact { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.landing-contact a { color: var(--accent); }
+
+.landing-footer {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+.landing-footer a { color: var(--accent); }
+
 .topbar {
   display: flex;
   align-items: center;
