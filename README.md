@@ -241,15 +241,19 @@ merges both, tagging each row with its `era`; new submissions go to the
 flat CSVs `build_history.py` reads.
 
 The **Historical War Crimes** category lists both workbooks' `Events` tabs
-(dup-check) and takes a new-event form: name, type,
-dates, location (historical + current + lat/lng), perpetrators, classification,
-casualty figures (free text — the sheet stores `"≈107–250"` etc), three summary
-paragraphs, and one source. On submit the backend:
+(dup-check) and takes a new-event form: name, type, dates, location (historical +
+current + lat/lng), perpetrators, classification, casualty figures (free text —
+the sheet stores `"≈107–250"` etc), three summary paragraphs, **and repeatable
+Details rows** — "+ Add" mini-rows for `war_crime` findings, `source`
+(name + URL), `testimony` (quote + attribution) and `casualty` / key facts
+(label + value + note). On submit the backend:
 
 - appends an `Events` row via the same insert-and-drag-the-`id`-formula dance as
   `submitIncident` (`id` is a running-counter formula, not typed) — stamps
-  `author` = the volunteer's email, `last_updated` = today, `submission_id`;
-- appends one `category="source"` row to the `Details` tab (best-effort).
+  `author` + `added_by` = the volunteer's email, `last_updated` = today,
+  `submission_id`;
+- appends each detail row to the Ongoing workbook's `Details` tab
+  (`appendHistDetails_`, `category` + `order` per group, best-effort, ≤ 60 rows).
 
 Editors get an **Edit** button per event (`update_hist_event`, matched on
 `event_name`, `row_mismatch` guard). Everything matches on `event_name`, never
@@ -265,9 +269,9 @@ Submissions reach the site on the **next `syncAll()`** (Sheet → CSV →
 
 ## Explicitly out of scope
 
-- Historical **Details** rows beyond the one source — the categorised timeline,
-  testimony, legal-finding and casualty-breakdown rows are still added by
-  reviewers directly in the sheet.
+- Historical **Details** rows for `timeline`, `legal`, `historical_impact`,
+  `commander` and `personality` — research/prose-heavy, still added by reviewers
+  in the sheet. Editing or removing existing detail rows is also sheet-only.
 - The "active" duplicate-warning banner (date ± 1 day + similar attack type).
   MVP ships the passive version: the volunteer sees the sorted incident list
   before the form, full stop.

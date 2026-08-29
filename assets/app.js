@@ -134,8 +134,20 @@ const HIST_FIELDS = [
   ["summary_para_1", "Summary — paragraph 1", "textarea", true],
   ["summary_para_2", "Summary — paragraph 2", "textarea", false],
   ["summary_para_3", "Summary — paragraph 3", "textarea", false],
-  ["source_name", "Source — name / citation", "text", false],
-  ["source_link", "Source — URL", "url", false],
+];
+
+// Repeatable Details-tab rows, per category. Each `fields` entry is
+// [key, label, type] and maps to a Details column. `order` is assigned per
+// group at submit time.
+const HIST_DETAIL_GROUPS = [
+  { category: "war_crime", label: "War-crime findings", add: "+ finding",
+    fields: [["heading_label", "Finding (e.g. “Attack on medical facility”)", "text"]] },
+  { category: "source", label: "Sources", add: "+ source",
+    fields: [["source", "Name / citation", "text"], ["source_link", "URL", "url"]] },
+  { category: "testimony", label: "Testimony", add: "+ testimony",
+    fields: [["content", "Quote", "textarea"], ["source", "Attribution (who / where)", "text"]] },
+  { category: "casualty", label: "Key facts / casualties", add: "+ fact",
+    fields: [["heading_label", "Label (e.g. “Deaths”)", "text"], ["value", "Value (e.g. “≈107”)", "text"], ["content", "Note", "text"]] },
 ];
 
 async function showHistorical() {
@@ -153,7 +165,7 @@ async function showHistorical() {
     listEl.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
   }
 
-  buildHistForm(el("hist-form"), {});
+  buildHistForm(el("hist-form"), {}, true);
   el("hist-form").addEventListener("submit", async (evt) => {
     evt.preventDefault();
     const btn = evt.target.querySelector('button[type="submit"]');
@@ -165,7 +177,8 @@ async function showHistorical() {
       await apiPost({
         action: "submit_hist_event",
         submissionId: crypto.randomUUID(),
-        fields: Object.fromEntries(new FormData(evt.target).entries()),
+        fields: eventFieldValues(evt.target),
+        details: collectHistDetails(evt.target),
       });
       okEl.hidden = false;
       showHistorical(); // reload list + reset form
@@ -175,6 +188,41 @@ async function showHistorical() {
       btn.disabled = false;
     }
   });
+}
+
+// The flat event fields only — the detail-section inputs have no `name`, so
+// FormData already skips them, but be explicit.
+function eventFieldValues(form) {
+  const out = {};
+  for (const [name] of HIST_FIELDS) {
+    const f = form.querySelector(`[name="${name}"]`);
+    if (f) out[name] = f.value;
+  }
+  return out;
+}
+
+// Walk the repeatable detail groups → [{category, order, ...fieldKeys}]
+function collectHistDetails(form) {
+  const rows = [];
+  form.querySelectorAll(".detail-group").forEach((grp) => {
+    const cat = grp.dataset.category;
+    let order = 0;
+    grp.querySelectorAll(".detail-row").forEach((rowEl) => {
+      const rec = { category: cat };
+      let any = false;
+      rowEl.querySelectorAll("[data-key]").forEach((inp) => {
+        const v = inp.value.trim();
+        if (v) any = true;
+        rec[inp.dataset.key] = v;
+      });
+      if (any) {
+        order += 1;
+        rec.order = order;
+        rows.push(rec);
+      }
+    });
+  });
+  return rows;
 }
 
 function renderHistList(events) {
@@ -204,9 +252,9 @@ function renderHistList(events) {
   }
 }
 
-// Builds the field set into `form` (used for both the new-event form and the
-// inline edit form). `values` pre-fills.
-function buildHistForm(form, values) {
+// Builds the field set into `form`. `values` pre-fills. `withDetails` adds the
+// repeatable Details section (new-event form only; edit is event-row only).
+function buildHistForm(form, values, withDetails) {
   form.innerHTML = "";
   for (const [name, label, type, required] of HIST_FIELDS) {
     const wrap = document.createElement("label");
@@ -240,10 +288,63 @@ function buildHistForm(form, values) {
     wrap.appendChild(input);
     form.appendChild(wrap);
   }
+
+  if (withDetails) {
+    const note = document.createElement("p");
+    note.className = "muted small";
+    note.textContent = "Optional — add as many rows as you can source. A reviewer fills in legal analysis, timeline and historical impact in the sheet.";
+    form.appendChild(note);
+    for (const grp of HIST_DETAIL_GROUPS) form.appendChild(detailGroupEl(grp));
+  }
+
   const submit = document.createElement("button");
   submit.type = "submit";
   submit.textContent = "Submit event";
   form.appendChild(submit);
+}
+
+// One <fieldset> for a detail category: a rows container + an "+ Add" button.
+function detailGroupEl(grp) {
+  const fs = document.createElement("fieldset");
+  fs.className = "detail-group";
+  fs.dataset.category = grp.category;
+  const lg = document.createElement("legend");
+  lg.textContent = grp.label;
+  fs.appendChild(lg);
+
+  const rows = document.createElement("div");
+  rows.className = "detail-rows";
+  fs.appendChild(rows);
+
+  const addRow = () => {
+    const row = document.createElement("div");
+    row.className = "detail-row";
+    for (const [key, label, type] of grp.fields) {
+      const inp = type === "textarea" ? document.createElement("textarea") : document.createElement("input");
+      if (type !== "textarea") inp.type = type;
+      else inp.rows = 2;
+      inp.dataset.key = key;
+      inp.placeholder = label;
+      inp.setAttribute("aria-label", grp.label + " — " + label);
+      row.appendChild(inp);
+    }
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.className = "detail-remove link-btn";
+    rm.textContent = "×";
+    rm.title = "Remove";
+    rm.addEventListener("click", () => row.remove());
+    row.appendChild(rm);
+    rows.appendChild(row);
+  };
+
+  const add = document.createElement("button");
+  add.type = "button";
+  add.className = "link-btn small";
+  add.textContent = grp.add;
+  add.addEventListener("click", addRow);
+  fs.appendChild(add);
+  return fs;
 }
 
 function startEditHistEvent(rowEl, ev) {
@@ -260,11 +361,6 @@ function startEditHistEvent(rowEl, ev) {
     summary_para_2: ev.summary2, summary_para_3: ev.summary3,
   });
   form.querySelector('button[type="submit"]').textContent = "Save changes";
-  // The source_* fields don't apply to an edit — drop them.
-  ["source_name", "source_link"].forEach((n) => {
-    const f = form.querySelector(`[name="${n}"]`);
-    if (f && f.parentElement) f.parentElement.remove();
-  });
 
   const cancel = document.createElement("button");
   cancel.type = "button";
@@ -289,7 +385,7 @@ function startEditHistEvent(rowEl, ev) {
         era: ev.era,
         row: ev.row,
         name: ev.name,
-        fields: Object.fromEntries(new FormData(form).entries()),
+        fields: eventFieldValues(form),
       });
       showHistorical();
     } catch (e) {
