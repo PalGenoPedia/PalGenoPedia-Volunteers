@@ -127,7 +127,7 @@ function doGet(e) {
       if (!volunteer.isEditor) throw new PortalError("not_authorized", "Only editors can manage archive priorities.");
       return jsonResponse(getArchivePolicy());
     }
-    return jsonResponse({ error: "unknown_action" });
+    return jsonResponse({ error: "unknown_action", message: "Unknown action: " + action + ". The deployed script may be out of date." });
   });
 }
 
@@ -145,7 +145,7 @@ function doPost(e) {
     if (body.action === "set_archive_policy") {
       return jsonResponse(setArchivePolicy(body, volunteer));
     }
-    return jsonResponse({ error: "unknown_action" });
+    return jsonResponse({ error: "unknown_action", message: "Unknown action: " + body.action + ". The deployed script may be out of date." });
   });
 }
 
