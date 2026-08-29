@@ -9,9 +9,12 @@ Two areas:
 
 - **War Crimes** — Hospitals, Universities, Schools, Religious Sites: the four
   facility-incident sections that share one schema (facility → incidents).
-- **Historical War Crimes** — two record sets, each its own sub-page and form:
-  *Current genocide* (Oct 2023 →) and *Pre-October 2023*. One Events row per
-  massacre + repeatable Details rows; reviewers build out the rest in the sheet.
+- **Current Genocide** — massacres and mass-atrocity events, Oct 2023 → present.
+- **Historical War Crimes** — the same, before Oct 2023 (Nakba 1948 → 2022).
+
+  These two are **separate top-level pages**, each with its own list and form
+  writing to its own workbook. One Events row per massacre + repeatable Details
+  rows; reviewers build out the rest in the sheet.
 
 Plus an editor-only **Archiving Portal** (source + media domain policy).
 
@@ -238,12 +241,13 @@ The historical data lives in **two workbooks, same 6-tab structure**:
 in the main repo concatenates the two back into the flat CSVs `build_history.py`
 reads.
 
-The **Historical War Crimes** category is a sub-picker with **two pages, one per
-era**: *Current genocide* (`era: "recent"` → Ongoing workbook) and *Pre-October
-2023* (`era: "pre"` → Historical workbook). Each page has its own list and its
-own form; the `era` rides along on every `hist_events` GET, `submit_hist_event`
-and `update_hist_event` call. `listHistEvents(era)` filters to that workbook (no
-`era` = both, still tagged); a submit or edit writes to that workbook.
+**Current Genocide** (`era: "recent"` → Ongoing workbook) and **Historical War
+Crimes** (`era: "pre"` → Historical workbook) are **two separate pages reached
+straight from Home** (`showHistoricalEra("recent" | "pre")`). Each has its own
+list and form; the `era` rides along on every `hist_events` GET,
+`submit_hist_event` and `update_hist_event` call. `listHistEvents(era)` filters
+to that workbook (no `era` = both, still tagged); a submit or edit writes to
+that workbook.
 
 Each new-event form takes: name, type, dates, location (historical +
 current + lat/lng), perpetrators, classification, casualty figures (free text —

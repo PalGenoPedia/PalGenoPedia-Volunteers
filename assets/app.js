@@ -95,7 +95,8 @@ function showHome() {
   const grid = el("home-cats");
   const cats = [
     { label: "War Crimes", desc: "Universities, hospitals, schools, religious sites — document current incidents.", go: showSections },
-    { label: "Historical War Crimes", desc: "Massacres and mass-atrocity events — current genocide (Oct 2023 →) and pre-October 2023, each with its own form.", go: showHistorical },
+    { label: "Current Genocide", desc: "Massacres and mass-atrocity events, October 2023 → present.", go: () => showHistoricalEra("recent") },
+    { label: "Historical War Crimes", desc: "Massacres and mass-atrocity events before October 2023 (Nakba 1948 → 2022).", go: () => showHistoricalEra("pre") },
   ];
   if (state.isEditor) {
     cats.push({ label: "Archiving Portal", desc: "Source (resource) and media archiving priorities.", go: showArchivingHome });
@@ -150,30 +151,16 @@ const HIST_DETAIL_GROUPS = [
     fields: [["heading_label", "Label (e.g. “Deaths”)", "text"], ["value", "Value (e.g. “≈107”)", "text"], ["content", "Note", "text"]] },
 ];
 
+// Two separate pages, one per era — reached straight from Home.
 const HIST_ERAS = {
-  recent: { label: "Current genocide", sub: "October 2023 → present (Ongoing workbook)" },
-  pre:    { label: "Pre-October 2023", sub: "Nakba 1948 → 2022 (Historical workbook)" },
+  recent: { label: "Current Genocide", sub: "October 2023 → present" },
+  pre:    { label: "Historical War Crimes", sub: "Nakba 1948 → 2022" },
 };
-
-// Sub-page picker: one form per era.
-function showHistorical() {
-  render("tpl-historical-home");
-  el("back-to-home").addEventListener("click", showHome);
-  const grid = el("hist-eras");
-  for (const key of ["recent", "pre"]) {
-    const e = HIST_ERAS[key];
-    const btn = document.createElement("button");
-    btn.className = "section-card";
-    btn.innerHTML = `<strong>${escapeHtml(e.label)}</strong><span class="muted small">${escapeHtml(e.sub)}</span>`;
-    btn.addEventListener("click", () => showHistoricalEra(key));
-    grid.appendChild(btn);
-  }
-}
 
 async function showHistoricalEra(era) {
   state.histEra = era;
   render("tpl-historical");
-  el("back-to-hist-home").addEventListener("click", showHistorical);
+  el("back-to-hist-home").addEventListener("click", showHome);
   el("hist-era-label").textContent = HIST_ERAS[era].label + " — " + HIST_ERAS[era].sub;
 
   const listEl = el("hist-list");
