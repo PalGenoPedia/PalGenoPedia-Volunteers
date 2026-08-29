@@ -188,7 +188,8 @@ function renderHistList(events) {
     const row = document.createElement("div");
     row.className = "incident-row";
     const s = document.createElement("div");
-    s.innerHTML = `<div class="date">${escapeHtml(ev.name)}</div>
+    const eraTag = ev.era === "recent" ? '<span class="req">ongoing</span> ' : "";
+    s.innerHTML = `<div class="date">${eraTag}${escapeHtml(ev.name)}</div>
       <div class="small">${escapeHtml(ev.dateStart || ev.dateEnd || "")}${ev.type ? " — " + escapeHtml(ev.type) : ""} · ${escapeHtml(truncate(ev.summary1 || "", 140))}</div>`;
     row.appendChild(s);
     if (state.isEditor) {
@@ -285,6 +286,7 @@ function startEditHistEvent(rowEl, ev) {
     try {
       await apiPost({
         action: "update_hist_event",
+        era: ev.era,
         row: ev.row,
         name: ev.name,
         fields: Object.fromEntries(new FormData(form).entries()),

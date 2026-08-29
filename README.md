@@ -232,8 +232,16 @@ Per domain the editor sets:
 
 ## Historical War Crimes
 
-The **Historical War Crimes** category lists the Historical Massacres
-workbook's `Events` tab (dup-check) and takes a new-event form: name, type,
+The historical data lives in **two workbooks, same 6-tab structure**:
+`Historical Events` (`1fTNCp…`, Nakba 1948 → 2022) and `Historical Events
+(Ongoing)` (`1Wtn0b…`, current genocide, Oct 2023 →). `listHistEvents()`
+merges both, tagging each row with its `era`; new submissions go to the
+**Ongoing** workbook; an editor's edit goes to whichever `era` holds the row.
+`tools/merge_history.py` in the main repo concatenates the two back into the
+flat CSVs `build_history.py` reads.
+
+The **Historical War Crimes** category lists both workbooks' `Events` tabs
+(dup-check) and takes a new-event form: name, type,
 dates, location (historical + current + lat/lng), perpetrators, classification,
 casualty figures (free text — the sheet stores `"≈107–250"` etc), three summary
 paragraphs, and one source. On submit the backend:
@@ -247,8 +255,8 @@ Editors get an **Edit** button per event (`update_hist_event`, matched on
 `event_name`, `row_mismatch` guard). Everything matches on `event_name`, never
 the `id` formula.
 
-**One-time:** add a `submission_id` header column to the `Events` tab (like the
-incidents tabs). Backend actions: `doGet ?action=hist_events`,
+**One-time:** add a `submission_id` header column to the `Events` tab of **both**
+workbooks (like the incidents tabs). Backend actions: `doGet ?action=hist_events`,
 `doPost {action:"submit_hist_event"}`, `doPost {action:"update_hist_event"}`
 (editor). Log actions: `submit-hist` / `edit-hist`.
 
