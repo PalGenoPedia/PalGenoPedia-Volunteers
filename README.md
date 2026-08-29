@@ -10,10 +10,10 @@ Two areas:
 - **War Crimes** — Hospitals, Universities, Schools, Religious Sites: the four
   facility-incident sections that share one schema (facility → incidents).
 - **Historical Events** — a sub-page with two record sets: *Current Genocide*
-  (Oct 2023 →) and *Historical War Crimes* (Nakba 1948 → 2022). Pick one and it
-  opens that set's own list and form, writing to its own workbook. One Events
-  row per massacre + repeatable Details rows; reviewers build out the rest in
-  the sheet.
+  (Oct 2023 →) and *Historical War Crimes* (Nakba 1948 → 2022), each writing to
+  its own workbook. Pick a set → its event list → select an event to see its
+  saved data and **append** more Details rows, or "+ Document a new event".
+  Reviewers build out the timeline / legal analysis in the sheet.
 
 Plus an editor-only **Archiving Portal** (source + media domain policy).
 
@@ -25,7 +25,9 @@ Two pieces, no new database:
    GitHub Pages to a subdomain, e.g. `contribute.palgenopedia.org`. Handles
    Google Sign-In (Google Identity Services) and all the UI: section picker,
    facility list with live incident counts, per-facility incident list
-   (the duplicate check), and the new-incident form.
+   (the duplicate check) and the new-incident form; the Historical Events
+   era pages, per-event pages and add-details / new-event forms; and the
+   editor-only archiving dashboards.
 2. **Backend** — `apps-script/Code.gs`, a Google Apps Script project bound to
    the same spreadsheets the main site already syncs from. Deployed as a Web
    App. `doGet` serves facility lists / incident lists as JSON; `doPost`
