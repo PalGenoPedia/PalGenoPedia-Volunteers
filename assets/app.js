@@ -392,13 +392,13 @@ async function showArchivePolicy() {
   el("back-to-sections").addEventListener("click", showSections);
 
   const body = el("policy-body");
-  body.innerHTML = '<tr><td colspan="7" class="muted">Loading domains…</td></tr>';
+  body.innerHTML = '<tr><td colspan="6" class="muted">Loading domains…</td></tr>';
 
   let data;
   try {
     data = await apiGet({ action: "archive_policy" });
   } catch (e) {
-    body.innerHTML = `<tr><td colspan="7" class="error">${escapeHtml(e.message)}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="6" class="error">${escapeHtml(e.message)}</td></tr>`;
     return;
   }
 
@@ -436,15 +436,8 @@ async function showArchivePolicy() {
       (row.deferred ? ` ${row.deferred}→` : "");
     tr.appendChild(arch);
 
-    // Recommendation — category + the method that usually works for it.
-    const rec = document.createElement("td");
-    rec.className = "small policy-rec";
-    rec.innerHTML =
-      `<span class="policy-cat-tag policy-cat-${cat.key}">${escapeHtml(cat.label)}</span> ` +
-      `<span title="${escapeHtml(cat.why)}">${escapeHtml(METHOD_LABELS[cat.method])}</span>`;
-    tr.appendChild(rec);
-
-    // Unconfigured rows pre-select the recommended method.
+    // Unconfigured rows pre-select the method recommended for this domain's
+    // category (see DOMAIN_CATEGORIES / the legend at the top of the page).
     const priSel = buildSelect(enums.priority, rule ? rule.priority : "", (v) => cap(v), "— set —");
     const metSel = buildSelect(enums.method, rule ? rule.method : cat.method, (v) => METHOD_LABELS[v] || v);
 
@@ -488,7 +481,7 @@ async function showArchivePolicy() {
     body.innerHTML = "";
     const list = q ? rows.filter((r) => r.domain.includes(q)) : rows;
     if (list.length === 0) {
-      body.innerHTML = '<tr><td colspan="7" class="muted">No domains.</td></tr>';
+      body.innerHTML = '<tr><td colspan="6" class="muted">No domains.</td></tr>';
       return;
     }
     for (const row of list) body.appendChild(makeRow(row));

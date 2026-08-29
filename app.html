@@ -121,30 +121,32 @@
       <em>Wayback Machine</em>; other methods are recorded for the ArchiveBox layer,
       Skip and unset are left alone. Changes commit straight to the main site repo.
     </p>
-    <details class="policy-legend small">
-      <summary>Recommended method by source type</summary>
+    <div class="policy-legend small">
+      <p><strong>Which method suits which source:</strong></p>
       <ul>
-        <li><strong>Social / video</strong> (x, Facebook, Instagram, Telegram, YouTube) →
-          <em>archive.today</em> — Wayback just captures a login wall.</li>
-        <li><strong>UN / intergovernmental</strong> (un.org, UNRWA, OHCHR, WHO, ICRC) →
-          <em>Wayback Machine</em> — stable, captures cleanly. Worth <strong>High</strong>.</li>
-        <li><strong>Rights / humanitarian</strong> (HRW, Amnesty, B'Tselem, Al Mezan, PCHR) →
-          <em>Wayback Machine</em>. Worth <strong>High</strong>; PDFs may want ArchiveBox later.</li>
-        <li><strong>Government / military</strong> (idf.il, mfa.gov.il, *.gov.ps) →
-          <em>Wayback Machine</em> — snapshot before statements change.</li>
-        <li><strong>Academic / reference</strong> (*.edu, JSTOR, palestine-studies, Wikipedia) →
-          <em>Wayback Machine</em>; ArchiveBox later for datasets/PDFs.</li>
-        <li><strong>News / other</strong> → <em>Wayback Machine</em>; a few paywalled
-          outlets may need archive.today.</li>
+        <li><strong>Social / video</strong> — x, Facebook, Instagram, Telegram, YouTube:
+          use <em>archive.today</em>. Wayback just captures a login wall for these.</li>
+        <li><strong>UN &amp; intergovernmental</strong> — un.org, UNRWA, OHCHR, WHO, ICRC,
+          ReliefWeb: <em>Wayback Machine</em>, and worth <strong>High</strong> priority.</li>
+        <li><strong>Rights &amp; humanitarian</strong> — HRW, Amnesty, B'Tselem, Al Mezan,
+          PCHR, MSF: <em>Wayback Machine</em>, <strong>High</strong> priority. Report PDFs
+          may want ArchiveBox later.</li>
+        <li><strong>Government / military</strong> — idf.il, mfa.gov.il, *.gov.ps, *.gov.il:
+          <em>Wayback Machine</em> — snapshot before statements are edited or removed.</li>
+        <li><strong>Academic / reference</strong> — *.edu, JSTOR, palestine-studies.org,
+          Wikipedia: <em>Wayback Machine</em>; ArchiveBox later for datasets and PDFs.</li>
+        <li><strong>News &amp; other</strong> — <em>Wayback Machine</em> handles most;
+          a few paywalled outlets may need archive.today.</li>
       </ul>
-    </details>
+      <p>The Method dropdown below is pre-set to the recommendation for each domain — change it if you disagree.</p>
+    </div>
     <input type="search" data-role="policy-filter" placeholder="Filter domains…">
     <p class="error" data-role="policy-error" hidden></p>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>Domain</th><th>URLs</th><th>Archived</th><th>Recommended</th>
+            <th>Domain</th><th>URLs</th><th>Archived</th>
             <th>Priority</th><th>Method</th><th></th>
           </tr>
         </thead>
