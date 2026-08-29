@@ -9,12 +9,11 @@ Two areas:
 
 - **War Crimes** — Hospitals, Universities, Schools, Religious Sites: the four
   facility-incident sections that share one schema (facility → incidents).
-- **Current Genocide** — massacres and mass-atrocity events, Oct 2023 → present.
-- **Historical War Crimes** — the same, before Oct 2023 (Nakba 1948 → 2022).
-
-  These two are **separate top-level pages**, each with its own list and form
-  writing to its own workbook. One Events row per massacre + repeatable Details
-  rows; reviewers build out the rest in the sheet.
+- **Historical Events** — a sub-page with two record sets: *Current Genocide*
+  (Oct 2023 →) and *Historical War Crimes* (Nakba 1948 → 2022). Pick one and it
+  opens that set's own list and form, writing to its own workbook. One Events
+  row per massacre + repeatable Details rows; reviewers build out the rest in
+  the sheet.
 
 Plus an editor-only **Archiving Portal** (source + media domain policy).
 
@@ -241,10 +240,11 @@ The historical data lives in **two workbooks, same 6-tab structure**:
 in the main repo concatenates the two back into the flat CSVs `build_history.py`
 reads.
 
-**Current Genocide** (`era: "recent"` → Ongoing workbook) and **Historical War
-Crimes** (`era: "pre"` → Historical workbook) are **two separate pages reached
-straight from Home** (`showHistoricalEra("recent" | "pre")`). Each has its own
-list and form; the `era` rides along on every `hist_events` GET,
+The **Historical Events** Home card opens a sub-page (`showHistorical`,
+`tpl-historical-home`) with two choices: *Current Genocide* (`era: "recent"` →
+Ongoing workbook) and *Historical War Crimes* (`era: "pre"` → Historical
+workbook). Picking one calls `showHistoricalEra(era)`, which renders that set's
+list and form. The `era` rides along on every `hist_events` GET,
 `submit_hist_event` and `update_hist_event` call. `listHistEvents(era)` filters
 to that workbook (no `era` = both, still tagged); a submit or edit writes to
 that workbook.

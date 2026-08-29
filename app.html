@@ -36,9 +36,21 @@
   </section>
 </template>
 
+<template id="tpl-historical-home">
+  <section>
+    <button class="back-btn" data-role="back-to-home">&larr; Home</button>
+    <h2>Historical Events</h2>
+    <p class="muted small">
+      Massacres and mass-atrocity events, split into two record sets. Pick the
+      one you are documenting — each opens its own list and form.
+    </p>
+    <div class="grid" data-role="hist-eras"></div>
+  </section>
+</template>
+
 <template id="tpl-historical">
   <section>
-    <button class="back-btn" data-role="back-to-hist-home">&larr; Home</button>
+    <button class="back-btn" data-role="back-to-hist-home">&larr; Historical Events</button>
     <h2 data-role="hist-era-label"></h2>
     <p class="muted small">
       Fill in the event plus any war-crime findings, sources, testimony and key
