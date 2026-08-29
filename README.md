@@ -5,11 +5,15 @@ form instead of editing Google Sheets directly. Submissions land in the same
 spreadsheets the existing PalGenoPedia sync already reads via
 `tools/build_records.py`.
 
-Covers Hospitals, Universities, Schools, and Religious Sites — the four
-facility-incident sections that share one schema. Massacres/historical
-events are still out of scope (see below); that needs its own form
-template and a sync gap closed first, per the architecture plan's phased
-rollout.
+Two areas:
+
+- **War Crimes** — Hospitals, Universities, Schools, Religious Sites: the four
+  facility-incident sections that share one schema (facility → incidents).
+- **Historical War Crimes** — the Historical Massacres workbook (one Events row
+  per massacre + categorised Details rows). The portal captures the Events row
+  plus one source; reviewers build the rest of the Details rows in the sheet.
+
+Plus an editor-only **Archiving Portal** (source + media domain policy).
 
 ## How it works
 
@@ -226,11 +230,36 @@ Per domain the editor sets:
 
 `data/archive-policy.json` is created on the first save — nothing to seed.
 
+## Historical War Crimes
+
+The **Historical War Crimes** category lists the Historical Massacres
+workbook's `Events` tab (dup-check) and takes a new-event form: name, type,
+dates, location (historical + current + lat/lng), perpetrators, classification,
+casualty figures (free text — the sheet stores `"≈107–250"` etc), three summary
+paragraphs, and one source. On submit the backend:
+
+- appends an `Events` row via the same insert-and-drag-the-`id`-formula dance as
+  `submitIncident` (`id` is a running-counter formula, not typed) — stamps
+  `author` = the volunteer's email, `last_updated` = today, `submission_id`;
+- appends one `category="source"` row to the `Details` tab (best-effort).
+
+Editors get an **Edit** button per event (`update_hist_event`, matched on
+`event_name`, `row_mismatch` guard). Everything matches on `event_name`, never
+the `id` formula.
+
+**One-time:** add a `submission_id` header column to the `Events` tab (like the
+incidents tabs). Backend actions: `doGet ?action=hist_events`,
+`doPost {action:"submit_hist_event"}`, `doPost {action:"update_hist_event"}`
+(editor). Log actions: `submit-hist` / `edit-hist`.
+
+Submissions reach the site on the **next `syncAll()`** (Sheet → CSV →
+`build-records.yml` → `build_history.py`), same as the facility incidents.
+
 ## Explicitly out of scope
 
-- Massacres/historical events (different schema entirely — needs its own
-  form template, and the historical spreadsheet isn't in the sync's
-  `SPREADSHEETS` array yet per `PIPELINE.md`).
+- Historical **Details** rows beyond the one source — the categorised timeline,
+  testimony, legal-finding and casualty-breakdown rows are still added by
+  reviewers directly in the sheet.
 - The "active" duplicate-warning banner (date ± 1 day + similar attack type).
   MVP ships the passive version: the volunteer sees the sorted incident list
   before the form, full stop.

@@ -21,6 +21,7 @@ let state = {
   facilities: [],
   currentFacility: null,
   incidents: [],
+  histEvents: [],
   isEditor: false,
   isAdmin: false,
 };
@@ -108,9 +109,194 @@ function showHome() {
   }
 }
 
-function showHistorical() {
+const HIST_EVENT_TYPES = [
+  "Massacre", "Ethnic cleansing", "Forced displacement", "Village destruction",
+  "Bombing / shelling", "Siege", "Other",
+];
+
+// Historical event fields, in form order. [name, label, type, required]
+// type: "text" | "date" | "textarea" | "select"
+const HIST_FIELDS = [
+  ["event_name", "Event name", "text", true],
+  ["event_type", "Event type", "select", false],
+  ["date_start", "Start date", "date", true],
+  ["date_end", "End date", "date", false],
+  ["date_context", "Date context (e.g. 'Under British Mandate')", "text", false],
+  ["location_historical", "Location — historical name", "text", true],
+  ["location_current", "Location — current name", "text", false],
+  ["location_lat", "Latitude", "text", false],
+  ["location_lng", "Longitude", "text", false],
+  ["perpetrators", "Perpetrator(s)", "text", false],
+  ["classification", "Legal classification", "text", false],
+  ["deaths", "Deaths (free text, e.g. '≈107–250')", "text", false],
+  ["injured", "Injured (free text)", "text", false],
+  ["forced_displacement", "Forced displacement (free text)", "text", false],
+  ["summary_para_1", "Summary — paragraph 1", "textarea", true],
+  ["summary_para_2", "Summary — paragraph 2", "textarea", false],
+  ["summary_para_3", "Summary — paragraph 3", "textarea", false],
+  ["source_name", "Source — name / citation", "text", false],
+  ["source_link", "Source — URL", "url", false],
+];
+
+async function showHistorical() {
   render("tpl-historical");
   el("back-to-home").addEventListener("click", showHome);
+
+  const listEl = el("hist-list");
+  listEl.innerHTML = '<p class="muted">Loading events…</p>';
+  try {
+    const data = await apiGet({ action: "hist_events" });
+    state.histEvents = (data.events || []).sort((a, b) => (a.dateStart < b.dateStart ? 1 : -1));
+    el("hist-count").textContent = `(${state.histEvents.length})`;
+    renderHistList(state.histEvents);
+  } catch (e) {
+    listEl.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+  }
+
+  buildHistForm(el("hist-form"), {});
+  el("hist-form").addEventListener("submit", async (evt) => {
+    evt.preventDefault();
+    const btn = evt.target.querySelector('button[type="submit"]');
+    const errEl = el("hist-error");
+    const okEl = el("hist-success");
+    errEl.hidden = okEl.hidden = true;
+    btn.disabled = true;
+    try {
+      await apiPost({
+        action: "submit_hist_event",
+        submissionId: crypto.randomUUID(),
+        fields: Object.fromEntries(new FormData(evt.target).entries()),
+      });
+      okEl.hidden = false;
+      showHistorical(); // reload list + reset form
+    } catch (e) {
+      errEl.hidden = false;
+      errEl.textContent = e.message;
+      btn.disabled = false;
+    }
+  });
+}
+
+function renderHistList(events) {
+  const listEl = el("hist-list");
+  listEl.innerHTML = "";
+  if (events.length === 0) {
+    listEl.innerHTML = '<p class="muted">No events recorded yet.</p>';
+    return;
+  }
+  for (const ev of events) {
+    const row = document.createElement("div");
+    row.className = "incident-row";
+    const s = document.createElement("div");
+    s.innerHTML = `<div class="date">${escapeHtml(ev.name)}</div>
+      <div class="small">${escapeHtml(ev.dateStart || ev.dateEnd || "")}${ev.type ? " — " + escapeHtml(ev.type) : ""} · ${escapeHtml(truncate(ev.summary1 || "", 140))}</div>`;
+    row.appendChild(s);
+    if (state.isEditor) {
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "link-btn small";
+      edit.textContent = "Edit";
+      edit.addEventListener("click", () => startEditHistEvent(row, ev));
+      row.appendChild(edit);
+    }
+    listEl.appendChild(row);
+  }
+}
+
+// Builds the field set into `form` (used for both the new-event form and the
+// inline edit form). `values` pre-fills.
+function buildHistForm(form, values) {
+  form.innerHTML = "";
+  for (const [name, label, type, required] of HIST_FIELDS) {
+    const wrap = document.createElement("label");
+    wrap.textContent = label + (required ? " *" : "");
+    let input;
+    if (type === "textarea") {
+      input = document.createElement("textarea");
+      input.rows = 3;
+    } else if (type === "select") {
+      input = document.createElement("select");
+      const blank = document.createElement("option");
+      blank.value = "";
+      blank.textContent = "Select…";
+      input.appendChild(blank);
+      for (const t of HIST_EVENT_TYPES) {
+        const o = document.createElement("option");
+        o.value = t;
+        o.textContent = t;
+        input.appendChild(o);
+      }
+    } else {
+      input = document.createElement("input");
+      input.type = type;
+    }
+    input.name = name;
+    if (required) input.required = true;
+    if (values[name] != null) {
+      if (input.tagName === "SELECT") input.value = values[name];
+      else input.value = values[name];
+    }
+    wrap.appendChild(input);
+    form.appendChild(wrap);
+  }
+  const submit = document.createElement("button");
+  submit.type = "submit";
+  submit.textContent = "Submit event";
+  form.appendChild(submit);
+}
+
+function startEditHistEvent(rowEl, ev) {
+  rowEl.innerHTML = "";
+  const form = document.createElement("form");
+  form.className = "edit-form";
+  // Map the list-event shape back to form field names.
+  buildHistForm(form, {
+    event_name: ev.name, event_type: ev.type, date_start: ev.dateStart, date_end: ev.dateEnd,
+    date_context: ev.dateContext, location_historical: ev.locHistorical, location_current: ev.locCurrent,
+    location_lat: ev.lat, location_lng: ev.lng, perpetrators: ev.perpetrators,
+    classification: ev.classification, deaths: ev.deaths, injured: ev.injured,
+    forced_displacement: ev.displacement, summary_para_1: ev.summary1,
+    summary_para_2: ev.summary2, summary_para_3: ev.summary3,
+  });
+  form.querySelector('button[type="submit"]').textContent = "Save changes";
+  // The source_* fields don't apply to an edit — drop them.
+  ["source_name", "source_link"].forEach((n) => {
+    const f = form.querySelector(`[name="${n}"]`);
+    if (f && f.parentElement) f.parentElement.remove();
+  });
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "link-btn";
+  cancel.textContent = "Cancel";
+  cancel.addEventListener("click", showHistorical);
+  form.appendChild(cancel);
+
+  const errEl = document.createElement("p");
+  errEl.className = "error";
+  errEl.hidden = true;
+  form.appendChild(errEl);
+
+  form.addEventListener("submit", async (evt) => {
+    evt.preventDefault();
+    const btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    errEl.hidden = true;
+    try {
+      await apiPost({
+        action: "update_hist_event",
+        row: ev.row,
+        name: ev.name,
+        fields: Object.fromEntries(new FormData(form).entries()),
+      });
+      showHistorical();
+    } catch (e) {
+      errEl.hidden = false;
+      errEl.textContent = e.message;
+      btn.disabled = false;
+    }
+  });
+  rowEl.appendChild(form);
 }
 
 function showArchivingHome() {

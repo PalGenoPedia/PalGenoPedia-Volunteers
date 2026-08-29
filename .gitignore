@@ -2,3 +2,7 @@
 node_modules/
 .DS_Store
 .idea/
+
+# Apps Script backend — kept local, pasted into the Apps Script editor by hand.
+# Not served by Pages; excluded so the backend logic + sheet IDs stay off the public repo.
+apps-script/Code.gs

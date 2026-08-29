@@ -40,11 +40,26 @@
   <section>
     <button class="back-btn" data-role="back-to-home">&larr; Home</button>
     <h2>Historical War Crimes</h2>
-    <p class="muted">
-      Massacres and pre-October-2023 events. This area is still being built —
-      it needs its own form template and a sync path for the historical
-      spreadsheet. It will be wired in here later.
+    <p class="muted small">
+      Massacres and pre-October-2023 events. Submit the event and one source;
+      a reviewer builds out the detailed timeline, testimony and legal findings
+      in the sheet afterwards.
     </p>
+
+    <div class="two-col">
+      <div>
+        <h3>Recorded events <span class="muted" data-role="hist-count"></span></h3>
+        <p class="muted small">Check this list before submitting — this is the duplicate check.</p>
+        <div class="list" data-role="hist-list"></div>
+      </div>
+
+      <div>
+        <h3>Document a new event</h3>
+        <form data-role="hist-form"></form>
+        <p class="error" data-role="hist-error" hidden></p>
+        <p class="success" data-role="hist-success" hidden>Submitted. A reviewer will verify it in the sheet.</p>
+      </div>
+    </div>
   </section>
 </template>
 
