@@ -12,6 +12,7 @@
 <header class="topbar">
   <span class="brand">PalGenoPedia Volunteer Portal</span>
   <button id="archive-link" class="link-btn" hidden>Archive priorities</button>
+  <button id="media-link" class="link-btn" hidden>Media archiving</button>
   <button id="admin-link" class="link-btn" hidden>Activity log</button>
   <span id="whoami" class="muted"></span>
   <button id="signout" class="link-btn">Sign out</button>
@@ -139,6 +140,49 @@
           a few paywalled outlets may need archive.today.</li>
       </ul>
       <p>The Method dropdown below is pre-set to the recommendation for each domain — change it if you disagree.</p>
+    </div>
+    <input type="search" data-role="policy-filter" placeholder="Filter domains…">
+    <p class="error" data-role="policy-error" hidden></p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Domain</th><th>URLs</th><th>Archived</th>
+            <th>Priority</th><th>Method</th><th></th>
+          </tr>
+        </thead>
+        <tbody data-role="policy-body"></tbody>
+      </table>
+    </div>
+  </section>
+</template>
+
+<template id="tpl-media-policy">
+  <section>
+    <button class="back-btn" data-role="back-to-sections">&larr; Sections</button>
+    <h2>Media archiving</h2>
+    <p class="muted small">
+      One row per domain that hosts a <code>video_url</code> or
+      <code>image_url</code>, most-cited first. Set a <strong>priority</strong>
+      and an <strong>archiving method</strong> per domain — separate from the
+      article-source policy. Changes commit straight to the main site repo.
+    </p>
+    <div class="policy-legend small">
+      <p><strong>Media needs a different approach:</strong></p>
+      <ul>
+        <li><strong>Video</strong> (YouTube, X, Facebook, Telegram, Instagram) —
+          the Wayback Machine can't reliably capture video. Leave as
+          <em>Manual</em> for now; these are logged in
+          <code>archive-deferred.txt</code> for the planned ArchiveBox +
+          yt-dlp job. Pick <em>archive.today</em> if someone will do it by hand.</li>
+        <li><strong>Direct image URLs</strong> (agency photo CDNs, WAFA / UNRWA
+          image hosts) — <em>Wayback Machine</em> often works for a plain
+          <code>.jpg</code>/<code>.png</code>. Try it; fall back to Manual.</li>
+        <li><strong>Licensed wire photos</strong> (Getty, Reuters Connect,
+          guim.co.uk, wsj.net) — <em>Manual</em>; these usually 403 or watermark.</li>
+      </ul>
+      <p>Unset domains default to <em>Manual</em>. The weekly archiver only
+        auto-captures a domain set to High/Normal + Wayback.</p>
     </div>
     <input type="search" data-role="policy-filter" placeholder="Filter domains…">
     <p class="error" data-role="policy-error" hidden></p>

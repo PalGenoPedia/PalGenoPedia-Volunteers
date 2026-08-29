@@ -149,9 +149,9 @@ actual boundary.
 
 ## Activity log (admin role)
 
-Every submission, edit, and archive-priority change is written to the
+Every submission, edit, and archive-policy change is written to the
 `SubmissionLog` tab in the admin spreadsheet, one row per action:
-`Timestamp, Volunteer email, Action ("submit"/"edit"/"archive-policy"),
+`Timestamp, Volunteer email, Action ("submit"/"edit"/"source-policy"/"media-policy"),
 Section, Facility, Reference`. `admin`-role volunteers see this as a live "Activity log" view
 in the portal itself (top bar → **Activity log**), most recent 200 entries,
 newest first — pulled straight from that tab via a `doGet` action gated on
@@ -170,9 +170,16 @@ The main site archives cited source URLs to the Wayback Machine
 repo). That run is **opt-in per source domain** — it only touches a domain an
 editor has configured here.
 
-Editors (and admins) get an **Archive priorities** view (top bar). It lists
-every source domain found in the data — `facebook.com`, `x.com`,
-`ochaopt.org`, `aljazeera.com`, `wafa.ps`, … — with its URL count and current
+Editors (and admins) get two top-bar views:
+
+- **Archive priorities** — article / report sources (`source_url_1`, the main
+  citation; `source_url_2`, comma-separated secondary sources; historical
+  `source_link`).
+- **Media archiving** — `video_url` and `image_url`. Separate because media
+  needs a different approach (Wayback can't capture video; the real answer is
+  the planned ArchiveBox + yt-dlp job, so most media domains stay `manual`).
+
+Each lists every domain found in that namespace with its URL count and current
 archive status. Per domain the editor sets:
 
 - **Priority** — `High` / `Normal` / `Skip`. The weekly archiver does High
@@ -185,14 +192,17 @@ archive status. Per domain the editor sets:
 
 ### How it's wired
 
-- The dashboard reads **`data/source-domains.json`** from the main repo (the
-  archiver regenerates it on every CSV change) for the domain list + counts.
-- Saving a row commits **`data/archive-policy.json`** to
-  `PalGenoPedia/PalGenoPedia` via the GitHub Contents API — same mechanism as
-  the sheet sync. The commit fires `archive-links.yml`.
-- `doGet ?action=archive_policy` and `doPost {action:"set_archive_policy"}` are
-  both gated **server-side** on the editor role; the hidden top-bar button is
-  UI convenience only.
+- Each view reads a **`data/*-domains.json`** inventory from the main repo
+  (`source-domains.json` / `media-domains.json` — the archiver regenerates both
+  on every CSV change) for the domain list + counts.
+- Saving a row commits the matching **`data/*-policy.json`**
+  (`archive-policy.json` / `media-policy.json`) to `PalGenoPedia/PalGenoPedia`
+  via the GitHub Contents API — same mechanism as the sheet sync. The commit
+  fires `archive-links.yml`.
+- `doGet ?action=archive_policy&kind=source|media` and
+  `doPost {action:"set_archive_policy", kind, …}` are both gated
+  **server-side** on the editor role; the hidden top-bar buttons are UI
+  convenience only.
 
 ### One-time setup
 

@@ -57,8 +57,16 @@ const OAUTH_CLIENT_ID = "1017482285870-q0dl90l30asn736kad0u7qbucopj209a.apps.goo
 // The main site repo. The portal reads data/source-domains.json (the domain
 // inventory the archiver emits) and commits data/archive-policy.json back.
 const MAIN_REPO = { owner: "PalGenoPedia", repo: "PalGenoPedia", branch: "main" };
-const POLICY_PATH = "data/archive-policy.json";
-const SOURCE_DOMAINS_PATH = "data/source-domains.json";
+
+// Two namespaces: "source" (article/report links) and "media" (video_url /
+// image_url). Each has its own inventory (read) + policy (write) file.
+const POLICY_FILES = {
+  source: { policy: "data/archive-policy.json", domains: "data/source-domains.json" },
+  media: { policy: "data/media-policy.json", domains: "data/media-domains.json" },
+};
+function policyFiles_(kind) {
+  return POLICY_FILES[kind] || POLICY_FILES.source;
+}
 
 const ARCHIVE_PRIORITIES = ["high", "normal", "skip"];
 const ARCHIVE_METHODS = ["wayback", "archivetoday", "archivebox", "manual"];
@@ -125,7 +133,7 @@ function doGet(e) {
     }
     if (action === "archive_policy") {
       if (!volunteer.isEditor) throw new PortalError("not_authorized", "Only editors can manage archive priorities.");
-      return jsonResponse(getArchivePolicy());
+      return jsonResponse(getArchivePolicy(e.parameter.kind));
     }
     return jsonResponse({ error: "unknown_action", message: "Unknown action: " + action + ". The deployed script may be out of date." });
   });
@@ -517,11 +525,12 @@ function validateSubmission(fields) {
 
 // --- Archive-priorities dashboard --------------------------------------
 
-// GET data/source-domains.json (inventory) + data/archive-policy.json (current
-// rules) from the main repo, merged into what the dashboard table needs.
-function getArchivePolicy() {
-  const inv = githubGetContent_(SOURCE_DOMAINS_PATH);
-  const pol = githubGetContent_(POLICY_PATH);
+// GET the inventory (*-domains.json) + current rules (*-policy.json) for a
+// namespace ("source" | "media"), merged into what the dashboard table needs.
+function getArchivePolicy(kind) {
+  const files = policyFiles_(kind);
+  const inv = githubGetContent_(files.domains);
+  const pol = githubGetContent_(files.policy);
   const domains = (inv.json && inv.json.domains) || {};
   const policy = (pol.json && pol.json.domains) || {};
 
@@ -534,25 +543,31 @@ function getArchivePolicy() {
       archived: Number(row.archived) || 0,
       pending: Number(row.pending) || 0,
       deferred: Number(row.deferred) || 0,
+      primary: Number(row.primary) || 0,
+      secondary: Number(row.secondary) || 0,
+      video: Number(row.video) || 0,
+      image: Number(row.image) || 0,
     };
   });
 
   return {
+    kind: kind === "media" ? "media" : "source",
     domains: list,
     policy: policy,
     enums: { priority: ARCHIVE_PRIORITIES, method: ARCHIVE_METHODS },
-    note: inv.json ? "" : "The domain inventory isn't published yet — the main repo's build workflow generates data/source-domains.json.",
+    note: inv.json ? "" : ("The domain inventory isn't published yet — the main repo's build workflow generates " + files.domains + "."),
   };
 }
 
-// Apply one or more { domain, priority, method } changes to
-// data/archive-policy.json in the main repo. Editor role only. Re-reads the
-// file (for its sha) immediately before writing, and retries once on a
-// concurrent-edit conflict.
+// Apply one or more { domain, priority, method } changes to a namespace's
+// *-policy.json in the main repo (body.kind selects source|media). Editor role
+// only. Re-reads the file (for its sha) immediately before writing, and retries
+// once on a concurrent-edit conflict.
 function setArchivePolicy(body, volunteer) {
   if (!volunteer.isEditor) {
     throw new PortalError("not_authorized", "Only editors can manage archive priorities.");
   }
+  const files = policyFiles_(body.kind);
   const changes = body.changes || [{ domain: body.domain, priority: body.priority, method: body.method }];
   if (!changes.length) throw new PortalError("validation_failed", "No changes given.");
   changes.forEach(function (c) {
@@ -567,8 +582,9 @@ function setArchivePolicy(body, volunteer) {
     }
   });
 
+  const kind = body.kind === "media" ? "media" : "source";
   for (let attempt = 0; attempt < 2; attempt++) {
-    const cur = githubGetContent_(POLICY_PATH);
+    const cur = githubGetContent_(files.policy);
     const doc = cur.json && typeof cur.json === "object" ? cur.json : {};
     if (!doc.domains || typeof doc.domains !== "object") doc.domains = {};
 
@@ -588,15 +604,15 @@ function setArchivePolicy(body, volunteer) {
       : changes.length + " domains";
 
     try {
-      githubPutContent_(POLICY_PATH, doc, cur.sha,
-        "archive-policy: " + label + " (" + volunteer.email + ")");
+      githubPutContent_(files.policy, doc, cur.sha,
+        kind + "-policy: " + label + " (" + volunteer.email + ")");
     } catch (err) {
       if (err.code === "policy_conflict" && attempt === 0) continue;
       throw err;
     }
 
     changes.forEach(function (c) {
-      logSubmission(volunteer.email, "archive-policy", "-", c.domain, c.priority + "/" + c.method);
+      logSubmission(volunteer.email, kind + "-policy", "-", c.domain, c.priority + "/" + c.method);
     });
     return { ok: true, updated: doc.updated };
   }

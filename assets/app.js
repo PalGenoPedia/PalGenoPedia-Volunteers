@@ -387,8 +387,12 @@ function categoryOf(domain) {
   return DOMAIN_CATEGORIES[DOMAIN_CATEGORIES.length - 1]; // news & other
 }
 
-async function showArchivePolicy() {
-  render("tpl-archive-policy");
+const showArchivePolicy = () => showPolicy("source");
+const showMediaPolicy = () => showPolicy("media");
+
+async function showPolicy(kind) {
+  const isMedia = kind === "media";
+  render(isMedia ? "tpl-media-policy" : "tpl-archive-policy");
   el("back-to-sections").addEventListener("click", showSections);
 
   const body = el("policy-body");
@@ -396,7 +400,7 @@ async function showArchivePolicy() {
 
   let data;
   try {
-    data = await apiGet({ action: "archive_policy" });
+    data = await apiGet({ action: "archive_policy", kind });
   } catch (e) {
     body.innerHTML = `<tr><td colspan="6" class="error">${escapeHtml(e.message)}</td></tr>`;
     return;
@@ -414,9 +418,12 @@ async function showArchivePolicy() {
     p.textContent = data.note;
   }
 
+  // Default method for an unconfigured domain: media is manual (no reliable
+  // auto-capture yet); sources follow the category recommendation.
+  const defaultMethod = (domain) => (isMedia ? "manual" : categoryOf(domain).method);
+
   function makeRow(row) {
     const rule = policy[row.domain] || null;
-    const cat = categoryOf(row.domain);
     const tr = document.createElement("tr");
     tr.className = "policy-row" + (rule && rule.priority === "skip" ? " policy-row--skip" : "");
 
@@ -426,6 +433,11 @@ async function showArchivePolicy() {
 
     const count = document.createElement("td");
     count.textContent = row.count;
+    if (isMedia) {
+      count.title = `${row.video} video · ${row.image} image`;
+    } else {
+      count.title = `${row.primary} primary · ${row.secondary} secondary`;
+    }
     tr.appendChild(count);
 
     const arch = document.createElement("td");
@@ -436,10 +448,8 @@ async function showArchivePolicy() {
       (row.deferred ? ` ${row.deferred}→` : "");
     tr.appendChild(arch);
 
-    // Unconfigured rows pre-select the method recommended for this domain's
-    // category (see DOMAIN_CATEGORIES / the legend at the top of the page).
     const priSel = buildSelect(enums.priority, rule ? rule.priority : "", (v) => cap(v), "— set —");
-    const metSel = buildSelect(enums.method, rule ? rule.method : cat.method, (v) => METHOD_LABELS[v] || v);
+    const metSel = buildSelect(enums.method, rule ? rule.method : defaultMethod(row.domain), (v) => METHOD_LABELS[v] || v);
 
     const priTd = document.createElement("td");
     priTd.appendChild(priSel);
@@ -460,7 +470,7 @@ async function showArchivePolicy() {
       statusTd.textContent = "Saving…";
       statusTd.className = "small muted";
       try {
-        const res = await apiPost({ action: "set_archive_policy", domain: row.domain, priority, method });
+        const res = await apiPost({ action: "set_archive_policy", kind, domain: row.domain, priority, method });
         policy[row.domain] = { priority, method };
         tr.classList.toggle("policy-row--skip", priority === "skip");
         statusTd.textContent = "Saved " + (res.updated || "");
@@ -606,6 +616,9 @@ function truncate(str, n) {
       const archiveLink = document.getElementById("archive-link");
       archiveLink.hidden = false;
       archiveLink.addEventListener("click", showArchivePolicy);
+      const mediaLink = document.getElementById("media-link");
+      mediaLink.hidden = false;
+      mediaLink.addEventListener("click", showMediaPolicy);
     }
     if (state.isAdmin) {
       const adminLink = document.getElementById("admin-link");
