@@ -55,6 +55,7 @@ assets/app.js         All frontend logic; talks to the Apps Script Web App
 assets/style.css       Shared styles
 config.js              Non-secret config: Apps Script Web App URL, Google OAuth client ID
 apps-script/Code.gs     Backend: doGet / doPost, token verification, sheet I/O
+                        *** GITIGNORED — local only, see "Known exposures" below ***
 apps-script/appsscript.json   Apps Script manifest
 CNAME                   GitHub Pages custom domain (edit before first deploy)
 robots.txt               Disallow: / — keeps this subdomain out of search entirely
@@ -293,6 +294,74 @@ Submissions reach the site on the **next `syncAll()`** (Sheet → CSV →
 - The "active" duplicate-warning banner (date ± 1 day + similar attack type).
   MVP ships the passive version: the volunteer sees the sorted incident list
   before the form, full stop.
+
+## Known exposures and accepted risks
+
+Recorded deliberately. Each of these is a decision, not an oversight — if one
+stops being acceptable, this is the list to revisit.
+
+### `apps-script/Code.gs` is in this repo's public git history
+
+`Code.gs` is gitignored as of **`ac100f3` (2026-08-29)** so the backend logic
+and the spreadsheet IDs stay off the public repo. That stops *future* commits
+and nothing else: the file was committed from **`d629bad` (2026-08-26)**
+through `ac100f3`, and all **18 versions are still reachable** in the public
+history —
+
+```bash
+git log --all --oneline -- apps-script/Code.gs
+git cat-file -p $(git rev-parse e91bdb6:apps-script/Code.gs)
+```
+
+**What is exposed:** all six spreadsheet IDs (the four war-crimes workbooks,
+both Historical Events workbooks), `VOLUNTEERS_SPREADSHEET_ID` (the volunteer
+allow-list and `SubmissionLog`), the OAuth client ID, and the complete backend
+logic, role model and validation rules.
+
+**What is NOT exposed:** no credential ever entered the repo. All 18 blobs were
+scanned for PAT (`ghp_`, `github_pat_`), API-key (`AIza`) and PEM patterns —
+**clean**. The GitHub PAT has only ever lived in Apps Script Script Properties,
+written by `storeToken()` from a blanked-out constant.
+
+**Why this is accepted rather than fixed:** the same spreadsheet IDs are already
+published on the main site — `tools/PIPELINE.md` ① tabulates all six, and the
+main repo is a no-build Pages site, so that file is served at
+`https://palgenopedia.org/tools/PIPELINE.md`. Rewriting this repo's history
+would not un-publish them. A Google Sheets ID is not a credential: access is
+governed entirely by each workbook's sharing settings.
+
+**What that makes load-bearing:** the sharing settings, and nothing else.
+Every one of the seven workbooks must be **restricted** (not "Anyone with the
+link"), because the link is effectively public. Re-check this whenever a
+workbook is copied or a new one is added — a copy inherits nothing and a fresh
+"Anyone with the link" default is the one change that turns this from a
+non-issue into a breach.
+
+### The Google ID token travels in the GET query string
+
+`assets/app.js` `apiGet()` puts the ID token in `?token=…`, so it lands in
+Apps Script execution logs and in browser history. Apps Script Web Apps cannot
+accept an `Authorization` header on a cross-origin GET without tripping a CORS
+preflight they do not handle, so the alternative is not available.
+`apiPost()` already sends the token in the body. Bounded by Google ID tokens
+expiring in about an hour.
+
+### Volunteer submissions publish without a review gate
+
+`add_hist_details` requires only an approved volunteer — not the editor role —
+and appends `Details` rows to any event. Nothing sits between that and
+publication: `build_history.py` filters detail rows on `event_id` + `category`
+only, so an appended row is live on palgenopedia.org at the next `syncAll()`
+plus build, and flows on into `data/events.json`, both feeds and the JSON-LD
+that the main site's `robots.txt` explicitly invites LLM crawlers to ingest.
+The `reviewed_by` column is written by nobody and read by nothing.
+
+This is the MVP's trust model: the allow-list *is* the review. Content is
+HTML-escaped throughout the generators, so the risk is editorial, not
+injection. If a pre-publication gate is wanted later, the hook is a
+`reviewed_by` filter in `build_history.load()` and `regenerate.py` — note that
+turning it on with the column empty would unpublish every existing detail row,
+so it needs a backfill in the same change.
 
 ## SEO / crawler isolation
 

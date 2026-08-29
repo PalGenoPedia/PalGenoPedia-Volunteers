@@ -5,4 +5,10 @@ node_modules/
 
 # Apps Script backend — kept local, pasted into the Apps Script editor by hand.
 # Not served by Pages; excluded so the backend logic + sheet IDs stay off the public repo.
+#
+# NOTE: this only stops FUTURE commits. Code.gs was tracked from d629bad
+# (2026-08-26) to ac100f3 (2026-08-29) and all 18 versions are still reachable in
+# the public history. No credential was ever committed. See README ->
+# "Known exposures and accepted risks" for what that means, and for the one thing
+# it makes load-bearing: every workbook's sharing setting must stay restricted.
 apps-script/Code.gs
