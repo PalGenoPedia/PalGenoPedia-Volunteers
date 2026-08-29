@@ -769,6 +769,32 @@ function pad_(s) {
   return s;
 }
 
+// Kick the main repo's "Archive source links" workflow by hand from the editor
+// (pick `triggerArchiveRun` → Run). Normally unnecessary — editing a policy in
+// the dashboard already fires it via a push trigger — but handy for a catch-up
+// run. NOTE: this needs the PAT to also grant "Actions: Read and write" on
+// PalGenoPedia/PalGenoPedia; a contents-only token gets a clean 403 here and
+// nothing else is affected.
+function triggerArchiveRun() {
+  const url = "https://api.github.com/repos/" + MAIN_REPO.owner + "/" + MAIN_REPO.repo +
+    "/actions/workflows/archive-links.yml/dispatches";
+  const res = UrlFetchApp.fetch(url, {
+    method: "post",
+    headers: githubHeaders_(),
+    contentType: "application/json",
+    payload: JSON.stringify({ ref: MAIN_REPO.branch, inputs: { mode: "policy-only" } }),
+    muteHttpExceptions: true,
+  });
+  const code = res.getResponseCode();
+  if (code === 204) {
+    Logger.log("Archive run dispatched — watch github.com/" + MAIN_REPO.owner + "/" +
+      MAIN_REPO.repo + "/actions");
+  } else {
+    Logger.log("Dispatch failed (" + code + "): " + res.getContentText().slice(0, 300) +
+      (code === 403 ? "\n  → the PAT needs 'Actions: Read and write' for this." : ""));
+  }
+}
+
 // --- Audit log + failure notification ----------------------------------
 
 // Fixed column order: Timestamp, Volunteer email, Action, Section,
