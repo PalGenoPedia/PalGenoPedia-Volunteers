@@ -256,3 +256,25 @@ th { color: var(--muted); font-weight: 600; }
 .policy-row--skip { opacity: 0.5; }
 .policy-saved { color: var(--success); }
 [data-role="policy-error"].muted { color: var(--muted); }
+
+.policy-legend { margin: 0 0 1rem; }
+.policy-legend summary { cursor: pointer; color: var(--accent); }
+.policy-legend ul { margin: 0.5rem 0 0; padding-inline-start: 1.2rem; }
+.policy-legend li { margin: 0.2rem 0; white-space: normal; }
+
+.policy-rec { white-space: normal; }
+.policy-cat-tag {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.82em;
+  background: #eef2f7;
+  color: #334155;
+  white-space: nowrap;
+}
+.policy-cat-social { background: #fce7f3; color: #9d174d; }
+.policy-cat-un { background: #dbeafe; color: #1e40af; }
+.policy-cat-rights { background: #ede9fe; color: #5b21b6; }
+.policy-cat-gov { background: #e5e7eb; color: #374151; }
+.policy-cat-academic { background: #dcfce7; color: #166534; }
+.policy-cat-news { background: #fef3c7; color: #92400e; }

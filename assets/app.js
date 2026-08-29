@@ -340,29 +340,72 @@ const METHOD_LABELS = {
   manual: "Manual",
 };
 
+// Ordered — first match wins. `needles` are matched against the domain (exact
+// host, ".suffix", or plain substring). Used only to SUGGEST a method per row;
+// the editor is free to pick anything. "News & other" is the fallback.
+const DOMAIN_CATEGORIES = [
+  { key: "social", label: "Social / video", method: "archivetoday",
+    why: "Wayback usually captures a login wall — archive.today (or manual) handles these.",
+    needles: ["x.com", "twitter.com", "facebook.com", "fb.com", "instagram.com", "tiktok.com",
+              "threads.net", "t.me", "telegram", "youtube.com", "youtu.be", "threadreaderapp",
+              "remix.aljazeera.com"] },
+  { key: "un", label: "UN / intergovernmental", method: "wayback",
+    why: "Stable institutional sites — Wayback captures them cleanly.",
+    needles: ["un.org", ".un.org", "unrwa", "unocha", "ohchr", "who.int", "icrc.org", "ifrc.org",
+              "reliefweb.int", "icc-cpi.int", "icj-cij.org", "insecurityinsight"] },
+  { key: "rights", label: "Rights / humanitarian", method: "wayback",
+    why: "NGO reports — Wayback is fine; consider ArchiveBox later for PDFs.",
+    needles: ["hrw.org", "amnesty.org", "btselem", "pchrgaza", "mezan.org", "adalah.org", "addameer",
+              "dci-palestine", "euromedmonitor", "phr.org.il", "map.org.uk", "msf.org",
+              "doctorswithoutborders", "muslimaid", "muslimnetwork", "breakingthesilence", "peacenow",
+              "forensic-architecture", "zochrot", "scholarsatrisk", "librarianswithpalestine",
+              "theelders", "imeu.org", "palestinercs", "hebronrc", "mesana.org", "merip.org",
+              "euro-med"] },
+  { key: "gov", label: "Government / military", method: "wayback",
+    why: "Official statements — Wayback, and worth a snapshot before they change.",
+    needles: [".gov", ".gov.il", ".gov.ps", ".gov.uk", ".pna.ps", "mfa.gov.il", "idf.il", "inss.org.il",
+              "terrorism-info", "history.state.gov", "nationalarchives", "moh.gov.ps", "mohe.pna.ps",
+              "pcbs.gov.ps", "gov.il"] },
+  { key: "academic", label: "Academic / reference", method: "wayback",
+    why: "Wayback for the page; ArchiveBox later if the source is a PDF/dataset.",
+    needles: [".edu", ".edu.", ".ac.", "jstor", "cambridge.org", "palestine-studies", "palquest",
+              "britannica", "wikipedia", "jewishvirtuallibrary", "uchicago.edu", "georgetown.edu",
+              "ncbi.nlm.nih.gov", "universityworldnews", "qou.edu", "gazaeducationsector",
+              "gazahcsector"] },
+  { key: "news", label: "News / other", method: "wayback",
+    why: "Wayback handles most news sites; a few paywalled ones may need archive.today.",
+    needles: [] },
+];
+
+function categoryOf(domain) {
+  const d = String(domain).toLowerCase();
+  for (const c of DOMAIN_CATEGORIES) {
+    for (const n of c.needles) {
+      if (n[0] === "." ? d.endsWith(n) || d.includes(n) : d === n || d.includes(n)) return c;
+    }
+  }
+  return DOMAIN_CATEGORIES[DOMAIN_CATEGORIES.length - 1]; // news & other
+}
+
 async function showArchivePolicy() {
   render("tpl-archive-policy");
   el("back-to-sections").addEventListener("click", showSections);
 
   const body = el("policy-body");
-  body.innerHTML = '<tr><td colspan="6" class="muted">Loading domains…</td></tr>';
+  body.innerHTML = '<tr><td colspan="7" class="muted">Loading domains…</td></tr>';
 
   let data;
   try {
     data = await apiGet({ action: "archive_policy" });
   } catch (e) {
-    body.innerHTML = `<tr><td colspan="6" class="error">${escapeHtml(e.message)}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7" class="error">${escapeHtml(e.message)}</td></tr>`;
     return;
   }
 
   const enums = data.enums || { priority: ["high", "normal", "skip"], method: Object.keys(METHOD_LABELS) };
   const policy = data.policy || {};
-  // Unconfigured domains first (they need attention), then most-cited first.
-  const rows = (data.domains || []).slice().sort((a, b) => {
-    const ca = !!policy[a.domain], cb = !!policy[b.domain];
-    if (ca !== cb) return ca ? 1 : -1;
-    return b.count - a.count;
-  });
+  // Most-cited first (sort by URL count, descending).
+  const rows = (data.domains || []).slice().sort((a, b) => b.count - a.count);
 
   if (data.note) {
     const p = el("policy-error");
@@ -371,79 +414,89 @@ async function showArchivePolicy() {
     p.textContent = data.note;
   }
 
-  function draw(list) {
-    body.innerHTML = "";
-    if (list.length === 0) {
-      body.innerHTML = '<tr><td colspan="6" class="muted">No domains.</td></tr>';
-      return;
-    }
-    for (const row of list) {
-      const rule = policy[row.domain] || null;
-      const tr = document.createElement("tr");
-      tr.className = "policy-row" + (rule && rule.priority === "skip" ? " policy-row--skip" : "");
+  function makeRow(row) {
+    const rule = policy[row.domain] || null;
+    const cat = categoryOf(row.domain);
+    const tr = document.createElement("tr");
+    tr.className = "policy-row" + (rule && rule.priority === "skip" ? " policy-row--skip" : "");
 
-      const dom = document.createElement("td");
-      dom.innerHTML = `<a href="${escapeHtml(row.sample)}" target="_blank" rel="noopener noreferrer">${escapeHtml(row.domain)}</a>`;
-      tr.appendChild(dom);
+    const dom = document.createElement("td");
+    dom.innerHTML = `<a href="${escapeHtml(row.sample)}" target="_blank" rel="noopener noreferrer">${escapeHtml(row.domain)}</a>`;
+    tr.appendChild(dom);
 
-      const count = document.createElement("td");
-      count.textContent = row.count;
-      tr.appendChild(count);
+    const count = document.createElement("td");
+    count.textContent = row.count;
+    tr.appendChild(count);
 
-      const arch = document.createElement("td");
-      arch.className = "small";
-      arch.textContent =
-        `${row.archived}✓` +
-        (row.pending ? ` ${row.pending}⏳` : "") +
-        (row.deferred ? ` ${row.deferred}→` : "");
-      tr.appendChild(arch);
+    const arch = document.createElement("td");
+    arch.className = "small";
+    arch.textContent =
+      `${row.archived}✓` +
+      (row.pending ? ` ${row.pending}⏳` : "") +
+      (row.deferred ? ` ${row.deferred}→` : "");
+    tr.appendChild(arch);
 
-      const priSel = buildSelect(enums.priority, rule ? rule.priority : "", (v) => cap(v), "— set —");
-      const metSel = buildSelect(enums.method, rule ? rule.method : "wayback", (v) => METHOD_LABELS[v] || v);
+    // Recommendation — category + the method that usually works for it.
+    const rec = document.createElement("td");
+    rec.className = "small policy-rec";
+    rec.innerHTML =
+      `<span class="policy-cat-tag policy-cat-${cat.key}">${escapeHtml(cat.label)}</span> ` +
+      `<span title="${escapeHtml(cat.why)}">${escapeHtml(METHOD_LABELS[cat.method])}</span>`;
+    tr.appendChild(rec);
 
-      const priTd = document.createElement("td");
-      priTd.appendChild(priSel);
-      tr.appendChild(priTd);
+    // Unconfigured rows pre-select the recommended method.
+    const priSel = buildSelect(enums.priority, rule ? rule.priority : "", (v) => cap(v), "— set —");
+    const metSel = buildSelect(enums.method, rule ? rule.method : cat.method, (v) => METHOD_LABELS[v] || v);
 
-      const metTd = document.createElement("td");
-      metTd.appendChild(metSel);
-      tr.appendChild(metTd);
+    const priTd = document.createElement("td");
+    priTd.appendChild(priSel);
+    tr.appendChild(priTd);
+    const metTd = document.createElement("td");
+    metTd.appendChild(metSel);
+    tr.appendChild(metTd);
 
-      const statusTd = document.createElement("td");
-      statusTd.className = "small";
-      tr.appendChild(statusTd);
+    const statusTd = document.createElement("td");
+    statusTd.className = "small";
+    tr.appendChild(statusTd);
 
-      async function save() {
-        const priority = priSel.value;
-        const method = metSel.value;
-        if (!priority) return; // still unset
-        priSel.disabled = metSel.disabled = true;
-        statusTd.textContent = "Saving…";
-        statusTd.className = "small muted";
-        try {
-          const res = await apiPost({ action: "set_archive_policy", domain: row.domain, priority, method });
-          policy[row.domain] = { priority, method };
-          tr.classList.toggle("policy-row--skip", priority === "skip");
-          statusTd.textContent = "Saved " + (res.updated || "");
-          statusTd.className = "small policy-saved";
-        } catch (e) {
-          statusTd.textContent = e.message;
-          statusTd.className = "small error";
-        } finally {
-          priSel.disabled = metSel.disabled = false;
-        }
+    async function save() {
+      const priority = priSel.value;
+      const method = metSel.value;
+      if (!priority) return;
+      priSel.disabled = metSel.disabled = true;
+      statusTd.textContent = "Saving…";
+      statusTd.className = "small muted";
+      try {
+        const res = await apiPost({ action: "set_archive_policy", domain: row.domain, priority, method });
+        policy[row.domain] = { priority, method };
+        tr.classList.toggle("policy-row--skip", priority === "skip");
+        statusTd.textContent = "Saved " + (res.updated || "");
+        statusTd.className = "small policy-saved";
+      } catch (e) {
+        statusTd.textContent = e.message;
+        statusTd.className = "small error";
+      } finally {
+        priSel.disabled = metSel.disabled = false;
       }
-      priSel.addEventListener("change", save);
-      metSel.addEventListener("change", save);
-
-      body.appendChild(tr);
     }
+    priSel.addEventListener("change", save);
+    metSel.addEventListener("change", save);
+    return tr;
   }
 
-  draw(rows);
+  function draw(q) {
+    body.innerHTML = "";
+    const list = q ? rows.filter((r) => r.domain.includes(q)) : rows;
+    if (list.length === 0) {
+      body.innerHTML = '<tr><td colspan="7" class="muted">No domains.</td></tr>';
+      return;
+    }
+    for (const row of list) body.appendChild(makeRow(row));
+  }
+
+  draw("");
   el("policy-filter").addEventListener("input", (evt) => {
-    const q = evt.target.value.trim().toLowerCase();
-    draw(rows.filter((r) => r.domain.includes(q)));
+    draw(evt.target.value.trim().toLowerCase());
   });
 }
 

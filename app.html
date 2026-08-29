@@ -115,19 +115,36 @@
     <button class="back-btn" data-role="back-to-sections">&larr; Sections</button>
     <h2>Archive priorities</h2>
     <p class="muted small">
-      One row per source domain in the data. Set a <strong>priority</strong> and an
-      <strong>archiving method</strong> per domain. The weekly archiver only touches
-      domains set to High or Normal with method <em>Wayback Machine</em> — everything
-      else is left alone or handed to another method. Changes commit straight to the
-      main site repo.
+      One row per source domain, most-cited first. Set a <strong>priority</strong>
+      (High / Normal / Skip) and an <strong>archiving method</strong> per domain.
+      The weekly archiver only touches domains set to High or Normal with method
+      <em>Wayback Machine</em>; other methods are recorded for the ArchiveBox layer,
+      Skip and unset are left alone. Changes commit straight to the main site repo.
     </p>
+    <details class="policy-legend small">
+      <summary>Recommended method by source type</summary>
+      <ul>
+        <li><strong>Social / video</strong> (x, Facebook, Instagram, Telegram, YouTube) →
+          <em>archive.today</em> — Wayback just captures a login wall.</li>
+        <li><strong>UN / intergovernmental</strong> (un.org, UNRWA, OHCHR, WHO, ICRC) →
+          <em>Wayback Machine</em> — stable, captures cleanly. Worth <strong>High</strong>.</li>
+        <li><strong>Rights / humanitarian</strong> (HRW, Amnesty, B'Tselem, Al Mezan, PCHR) →
+          <em>Wayback Machine</em>. Worth <strong>High</strong>; PDFs may want ArchiveBox later.</li>
+        <li><strong>Government / military</strong> (idf.il, mfa.gov.il, *.gov.ps) →
+          <em>Wayback Machine</em> — snapshot before statements change.</li>
+        <li><strong>Academic / reference</strong> (*.edu, JSTOR, palestine-studies, Wikipedia) →
+          <em>Wayback Machine</em>; ArchiveBox later for datasets/PDFs.</li>
+        <li><strong>News / other</strong> → <em>Wayback Machine</em>; a few paywalled
+          outlets may need archive.today.</li>
+      </ul>
+    </details>
     <input type="search" data-role="policy-filter" placeholder="Filter domains…">
     <p class="error" data-role="policy-error" hidden></p>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>Domain</th><th>URLs</th><th>Archived</th>
+            <th>Domain</th><th>URLs</th><th>Archived</th><th>Recommended</th>
             <th>Priority</th><th>Method</th><th></th>
           </tr>
         </thead>
