@@ -153,6 +153,9 @@ function doPost(e) {
     if (body.action === "set_archive_policy") {
       return jsonResponse(setArchivePolicy(body, volunteer));
     }
+    if (body.action === "set_archived_url") {
+      return jsonResponse(setArchivedUrl(body, volunteer));
+    }
     return jsonResponse({ error: "unknown_action", message: "Unknown action: " + body.action + ". The deployed script may be out of date." });
   });
 }
@@ -547,6 +550,7 @@ function getArchivePolicy(kind) {
       secondary: Number(row.secondary) || 0,
       video: Number(row.video) || 0,
       image: Number(row.image) || 0,
+      urls: Array.isArray(row.urls) ? row.urls : [],
     };
   });
 
@@ -617,6 +621,48 @@ function setArchivePolicy(body, volunteer) {
     return { ok: true, updated: doc.updated };
   }
   throw new PortalError("policy_conflict", "Another edit landed first — reload and try again.");
+}
+
+// Record a hand-made archive snapshot for one URL in data/archived-links.json.
+// Editor role only. Sets status "archived" + manual:true so the weekly archiver
+// leaves it alone and the generated pages show a 🕰 link to `archive_url`.
+function setArchivedUrl(body, volunteer) {
+  if (!volunteer.isEditor) {
+    throw new PortalError("not_authorized", "Only editors can record archive links.");
+  }
+  const url = String(body.url || "").trim().replace(/\/$/, "").split("#")[0];
+  const snap = String(body.archive_url || "").trim();
+  if (!/^https?:\/\/\S+$/.test(url)) throw new PortalError("validation_failed", "Bad source URL.");
+  if (!/^https?:\/\/\S+$/.test(snap)) throw new PortalError("validation_failed", "Archive link must be a full http(s) URL.");
+
+  const STATE_PATH = "data/archived-links.json";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const cur = githubGetContent_(STATE_PATH);
+    const doc = cur.json && typeof cur.json === "object" ? cur.json : {};
+    const prev = doc[url] && typeof doc[url] === "object" ? doc[url] : {};
+    doc[url] = {
+      status: "archived",
+      wayback: snap,
+      method: "manual",
+      manual: true,
+      manual_by: volunteer.email,
+      checked: Utilities.formatDate(new Date(), "Etc/UTC", "yyyy-MM-dd"),
+      social: prev.social || false,
+    };
+    const sorted = {};
+    Object.keys(doc).sort().forEach(function (k) { sorted[k] = doc[k]; });
+
+    try {
+      githubPutContent_(STATE_PATH, sorted, cur.sha,
+        "archived-links: manual snapshot (" + volunteer.email + ")");
+    } catch (err) {
+      if (err.code === "policy_conflict" && attempt === 0) continue;
+      throw err;
+    }
+    logSubmission(volunteer.email, "manual-archive", "-", url, snap);
+    return { ok: true, url: url, snap: snap };
+  }
+  throw new PortalError("policy_conflict", "archived-links.json changed under us — reload and retry.");
 }
 
 // --- GitHub Contents API (main repo) ----------------------------------

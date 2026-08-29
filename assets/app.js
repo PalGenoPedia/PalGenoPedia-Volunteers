@@ -422,13 +422,116 @@ async function showPolicy(kind) {
   // auto-capture yet); sources follow the category recommendation.
   const defaultMethod = (domain) => (isMedia ? "manual" : categoryOf(domain).method);
 
+  const URL_STATUS = {
+    archived: "🕰 archived",
+    requested: "⏳ pending",
+    deferred: "🕰 queued",
+    failed: "⚠ failed",
+    new: "— not yet",
+  };
+
+  // The expandable per-domain URL list. Each URL shows its status; anything not
+  // archived gets an inline field to paste a hand-made snapshot link.
+  function makeDetailRow(row) {
+    const tr = document.createElement("tr");
+    tr.className = "policy-detail";
+    const td = document.createElement("td");
+    td.colSpan = 6;
+    const ul = document.createElement("ul");
+    ul.className = "policy-urls small";
+
+    for (const item of row.urls) {
+      const li = document.createElement("li");
+
+      const st = document.createElement("span");
+      st.className = "policy-url-status policy-url-" + item.status;
+      st.textContent = URL_STATUS[item.status] || item.status;
+      if (item.status === "deferred" && item.method) st.textContent = "🕰 " + item.method;
+      if (item.manual) st.textContent += " (manual)";
+      li.appendChild(st);
+
+      li.appendChild(document.createTextNode(" "));
+      const a = document.createElement("a");
+      a.href = item.u; a.target = "_blank"; a.rel = "noopener noreferrer";
+      a.textContent = item.u.replace(/^https?:\/\/(www\.)?/, "");
+      li.appendChild(a);
+
+      const role = document.createElement("span");
+      role.className = "policy-url-role";
+      role.textContent = item.role;
+      li.appendChild(role);
+
+      if (item.status === "archived" && item.snap) {
+        const s = document.createElement("a");
+        s.href = item.snap; s.target = "_blank"; s.rel = "noopener noreferrer";
+        s.className = "policy-url-snap";
+        s.textContent = "view snapshot ↗";
+        li.appendChild(s);
+      } else {
+        // "+ add archived link" → reveals an input
+        const add = document.createElement("button");
+        add.type = "button";
+        add.className = "link-btn small";
+        add.textContent = "+ archived link";
+        const inp = document.createElement("input");
+        inp.type = "url";
+        inp.placeholder = "https://archive.today/… or Wayback URL";
+        inp.className = "policy-url-input";
+        inp.hidden = true;
+        const note = document.createElement("span");
+        note.className = "small";
+        add.addEventListener("click", () => {
+          inp.hidden = !inp.hidden;
+          if (!inp.hidden) inp.focus();
+        });
+        inp.addEventListener("keydown", async (ev) => {
+          if (ev.key !== "Enter") return;
+          const val = inp.value.trim();
+          if (!/^https?:\/\/\S+$/.test(val)) { note.textContent = "needs a full URL"; note.className = "small error"; return; }
+          inp.disabled = true; note.textContent = "Saving…"; note.className = "small muted";
+          try {
+            await apiPost({ action: "set_archived_url", url: item.u, archive_url: val });
+            item.status = "archived"; item.snap = val; item.manual = true;
+            st.textContent = "🕰 archived (manual)";
+            st.className = "policy-url-status policy-url-archived";
+            inp.remove(); add.remove(); note.remove();
+            const s = document.createElement("a");
+            s.href = val; s.target = "_blank"; s.rel = "noopener noreferrer";
+            s.className = "policy-url-snap"; s.textContent = "view snapshot ↗";
+            li.appendChild(s);
+          } catch (e) {
+            inp.disabled = false; note.textContent = e.message; note.className = "small error";
+          }
+        });
+        li.appendChild(add);
+        li.appendChild(inp);
+        li.appendChild(note);
+      }
+      ul.appendChild(li);
+    }
+    td.appendChild(ul);
+    tr.appendChild(td);
+    return tr;
+  }
+
   function makeRow(row) {
     const rule = policy[row.domain] || null;
     const tr = document.createElement("tr");
     tr.className = "policy-row" + (rule && rule.priority === "skip" ? " policy-row--skip" : "");
 
     const dom = document.createElement("td");
-    dom.innerHTML = `<a href="${escapeHtml(row.sample)}" target="_blank" rel="noopener noreferrer">${escapeHtml(row.domain)}</a>`;
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "link-btn policy-domain";
+    toggle.textContent = "▸ " + row.domain;
+    let detail = null;
+    toggle.addEventListener("click", () => {
+      if (detail) { detail.remove(); detail = null; toggle.textContent = "▸ " + row.domain; return; }
+      detail = makeDetailRow(row);
+      tr.after(detail);
+      toggle.textContent = "▾ " + row.domain;
+    });
+    dom.appendChild(toggle);
     tr.appendChild(dom);
 
     const count = document.createElement("td");

@@ -151,8 +151,8 @@ actual boundary.
 
 Every submission, edit, and archive-policy change is written to the
 `SubmissionLog` tab in the admin spreadsheet, one row per action:
-`Timestamp, Volunteer email, Action ("submit"/"edit"/"source-policy"/"media-policy"),
-Section, Facility, Reference`. `admin`-role volunteers see this as a live "Activity log" view
+`Timestamp, Volunteer email, Action ("submit"/"edit"/"source-policy"/
+"media-policy"/"manual-archive"), Section, Facility, Reference`. `admin`-role volunteers see this as a live "Activity log" view
 in the portal itself (top bar → **Activity log**), most recent 200 entries,
 newest first — pulled straight from that tab via a `doGet` action gated on
 `isAdmin`, same non-authoritative-UI-check-plus-real-backend-check pattern
@@ -180,7 +180,15 @@ Editors (and admins) get two top-bar views:
   the planned ArchiveBox + yt-dlp job, so most media domains stay `manual`).
 
 Each lists every domain found in that namespace with its URL count and current
-archive status. Per domain the editor sets:
+archive status. **Click a domain** to expand every URL under it with its
+per-URL status (archived / pending / queued / not yet); any URL that isn't
+archived gets an inline field to paste a **hand-made snapshot link**
+(archive.today, a manual Wayback save, …). That writes
+`{status: "archived", method: "manual", manual: true}` into
+`data/archived-links.json`, the generated pages then show a 🕰 link to it, and
+the weekly archiver skips it forever after.
+
+Per domain the editor sets:
 
 - **Priority** — `High` / `Normal` / `Skip`. The weekly archiver does High
   domains first; Skip (and any unconfigured domain) is left alone.

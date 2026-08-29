@@ -257,6 +257,34 @@ th { color: var(--muted); font-weight: 600; }
 .policy-saved { color: var(--success); }
 [data-role="policy-error"].muted { color: var(--muted); }
 
+.policy-domain {
+  font-weight: 500;
+  padding: 0;
+  color: var(--accent);
+}
+.policy-detail > td { background: #f8fafc; }
+.policy-urls { margin: 0; padding: 0.25rem 0 0.25rem 0.5rem; list-style: none; }
+.policy-urls li {
+  margin: 0.3rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: normal;
+}
+.policy-url-status { font-variant-emoji: text; min-width: 8.5rem; color: var(--muted); }
+.policy-url-archived { color: var(--success); }
+.policy-url-failed { color: var(--danger); }
+.policy-url-role {
+  font-size: 0.8em;
+  padding: 0 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+}
+.policy-url-snap { color: var(--accent); }
+.policy-url-input { min-width: 16rem; padding: 0.2rem 0.4rem; }
+
 .policy-legend {
   margin: 0 0 1.25rem;
   padding: 0.75rem 1rem;
