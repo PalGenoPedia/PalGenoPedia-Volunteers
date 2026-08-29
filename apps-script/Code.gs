@@ -724,6 +724,51 @@ function githubPutContent_(path, obj, sha, message) {
   return JSON.parse(res.getContentText());
 }
 
+// --- Setup check ------------------------------------------------------
+//
+// Run this straight from the Apps Script editor (pick `checkArchiveSetup`
+// from the function dropdown → Run) to verify the dashboard's GitHub wiring
+// without touching the site or the sheets. It logs a report and changes
+// nothing — the fastest way to diagnose a "Request failed" in either
+// Archive-priorities view.
+function checkArchiveSetup() {
+  const out = [];
+  try {
+    githubToken_();
+    out.push("GITHUB_TOKEN .......... set");
+  } catch (e) {
+    Logger.log("GITHUB_TOKEN .......... NOT SET\n" +
+      "  → Project Settings → Script properties → add GITHUB_TOKEN = your fine-grained PAT\n" +
+      "    (repo access: only PalGenoPedia/PalGenoPedia · permission: Contents = Read and write)");
+    return;
+  }
+
+  const paths = [
+    POLICY_FILES.source.domains, POLICY_FILES.media.domains,
+    POLICY_FILES.source.policy, POLICY_FILES.media.policy,
+    "data/archived-links.json",
+  ];
+  paths.forEach(function (p) {
+    try {
+      const r = githubGetContent_(p);
+      if (r.json === null) {
+        out.push(pad_(p) + " 404 — not on main yet (a build workflow will create it)");
+      } else {
+        const n = r.json.domains ? Object.keys(r.json.domains).length : Object.keys(r.json).length;
+        out.push(pad_(p) + " OK (" + n + " entries)");
+      }
+    } catch (e) {
+      out.push(pad_(p) + " ERROR — " + e.message);
+    }
+  });
+  Logger.log(out.join("\n"));
+}
+
+function pad_(s) {
+  while (s.length < 28) s += " ";
+  return s;
+}
+
 // --- Audit log + failure notification ----------------------------------
 
 // Fixed column order: Timestamp, Volunteer email, Action, Section,
