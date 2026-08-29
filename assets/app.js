@@ -87,9 +87,43 @@ function el(role, root = appEl) {
 
 // --- Screens ---------------------------------------------------------
 
+// Top-level: three categories. "Archiving Portal" is editor-only.
+function showHome() {
+  state.currentSection = null;
+  render("tpl-home");
+  const grid = el("home-cats");
+  const cats = [
+    { label: "War Crimes", desc: "Universities, hospitals, schools, religious sites — document current incidents.", go: showSections },
+    { label: "Historical War Crimes", desc: "Massacres and pre-October-2023 events. Being built — wired later.", go: showHistorical },
+  ];
+  if (state.isEditor) {
+    cats.push({ label: "Archiving Portal", desc: "Source (resource) and media archiving priorities.", go: showArchivingHome });
+  }
+  for (const c of cats) {
+    const btn = document.createElement("button");
+    btn.className = "section-card";
+    btn.innerHTML = `<strong>${escapeHtml(c.label)}</strong><span class="muted small">${escapeHtml(c.desc)}</span>`;
+    btn.addEventListener("click", c.go);
+    grid.appendChild(btn);
+  }
+}
+
+function showHistorical() {
+  render("tpl-historical");
+  el("back-to-home").addEventListener("click", showHome);
+}
+
+function showArchivingHome() {
+  render("tpl-archiving-home");
+  el("back-to-home").addEventListener("click", showHome);
+  el("go-resources").addEventListener("click", () => showPolicy("source"));
+  el("go-media").addEventListener("click", () => showPolicy("media"));
+}
+
 function showSections() {
   state.currentSection = null;
   render("tpl-sections");
+  el("back-to-home").addEventListener("click", showHome);
   const grid = el("sections");
   for (const section of state.sections) {
     const btn = document.createElement("button");
@@ -291,7 +325,7 @@ function startEditIncident(rowEl, incident) {
 
 async function showAdminLog() {
   render("tpl-admin-log");
-  el("back-to-sections").addEventListener("click", showSections);
+  el("back-to-home").addEventListener("click", showHome);
 
   const body = el("log-body");
   body.innerHTML = '<tr><td colspan="6" class="muted">Loading…</td></tr>';
@@ -387,13 +421,10 @@ function categoryOf(domain) {
   return DOMAIN_CATEGORIES[DOMAIN_CATEGORIES.length - 1]; // news & other
 }
 
-const showArchivePolicy = () => showPolicy("source");
-const showMediaPolicy = () => showPolicy("media");
-
 async function showPolicy(kind) {
   const isMedia = kind === "media";
   render(isMedia ? "tpl-media-policy" : "tpl-archive-policy");
-  el("back-to-sections").addEventListener("click", showSections);
+  el("back-to-archiving").addEventListener("click", showArchivingHome);
 
   const body = el("policy-body");
   body.innerHTML = '<tr><td colspan="6" class="muted">Loading domains…</td></tr>';
@@ -715,20 +746,13 @@ function truncate(str, n) {
     state.isAdmin = !!data.isAdmin;
     const badge = state.isAdmin ? " (admin)" : state.isEditor ? " (editor)" : "";
     document.getElementById("whoami").textContent = data.email + badge;
-    if (state.isEditor) {
-      const archiveLink = document.getElementById("archive-link");
-      archiveLink.hidden = false;
-      archiveLink.addEventListener("click", showArchivePolicy);
-      const mediaLink = document.getElementById("media-link");
-      mediaLink.hidden = false;
-      mediaLink.addEventListener("click", showMediaPolicy);
-    }
+    document.getElementById("brand-home").addEventListener("click", showHome);
     if (state.isAdmin) {
       const adminLink = document.getElementById("admin-link");
       adminLink.hidden = false;
       adminLink.addEventListener("click", showAdminLog);
     }
-    showSections();
+    showHome();
   } catch (e) {
     appEl.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
   }

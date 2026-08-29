@@ -10,9 +10,7 @@
 </head>
 <body>
 <header class="topbar">
-  <span class="brand">PalGenoPedia Volunteer Portal</span>
-  <button id="archive-link" class="link-btn" hidden>Archive priorities</button>
-  <button id="media-link" class="link-btn" hidden>Media archiving</button>
+  <button id="brand-home" class="brand link-btn">PalGenoPedia Volunteer Portal</button>
   <button id="admin-link" class="link-btn" hidden>Activity log</button>
   <span id="whoami" class="muted"></span>
   <button id="signout" class="link-btn">Sign out</button>
@@ -22,10 +20,51 @@
   <p class="muted">Loading…</p>
 </main>
 
+<template id="tpl-home">
+  <section>
+    <h2>PalGenoPedia Volunteer Portal</h2>
+    <p class="muted small">Choose an area.</p>
+    <div class="grid" data-role="home-cats"></div>
+  </section>
+</template>
+
 <template id="tpl-sections">
   <section>
-    <h2>Choose a section</h2>
+    <button class="back-btn" data-role="back-to-home">&larr; Home</button>
+    <h2>War Crimes — choose a section</h2>
     <div class="grid" data-role="sections"></div>
+  </section>
+</template>
+
+<template id="tpl-historical">
+  <section>
+    <button class="back-btn" data-role="back-to-home">&larr; Home</button>
+    <h2>Historical War Crimes</h2>
+    <p class="muted">
+      Massacres and pre-October-2023 events. This area is still being built —
+      it needs its own form template and a sync path for the historical
+      spreadsheet. It will be wired in here later.
+    </p>
+  </section>
+</template>
+
+<template id="tpl-archiving-home">
+  <section>
+    <button class="back-btn" data-role="back-to-home">&larr; Home</button>
+    <h2>Archiving Portal</h2>
+    <p class="muted small">
+      Curate which source domains get preserved, and how. Editors only.
+    </p>
+    <div class="grid">
+      <button class="section-card" data-role="go-resources">
+        <strong>Resources</strong>
+        <span class="muted small">Article / report sources — source_url_1 (primary) and source_url_2 (secondary).</span>
+      </button>
+      <button class="section-card" data-role="go-media">
+        <strong>Media</strong>
+        <span class="muted small">video_url and image_url — separate policy, usually Manual / ArchiveBox.</span>
+      </button>
+    </div>
   </section>
 </template>
 
@@ -113,8 +152,8 @@
 
 <template id="tpl-archive-policy">
   <section>
-    <button class="back-btn" data-role="back-to-sections">&larr; Sections</button>
-    <h2>Archive priorities</h2>
+    <button class="back-btn" data-role="back-to-archiving">&larr; Archiving Portal</button>
+    <h2>Resources archiving</h2>
     <p class="muted small">
       One row per source domain, most-cited first. Set a <strong>priority</strong>
       (High / Normal / Skip) and an <strong>archiving method</strong> per domain.
@@ -159,7 +198,7 @@
 
 <template id="tpl-media-policy">
   <section>
-    <button class="back-btn" data-role="back-to-sections">&larr; Sections</button>
+    <button class="back-btn" data-role="back-to-archiving">&larr; Archiving Portal</button>
     <h2>Media archiving</h2>
     <p class="muted small">
       One row per domain that hosts a <code>video_url</code> or
@@ -202,7 +241,7 @@
 
 <template id="tpl-admin-log">
   <section>
-    <button class="back-btn" data-role="back-to-sections">&larr; Sections</button>
+    <button class="back-btn" data-role="back-to-home">&larr; Home</button>
     <h2>Activity log</h2>
     <p class="muted small">Most recent 200 submissions and edits, newest first.</p>
     <div class="table-wrap">
