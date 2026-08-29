@@ -240,38 +240,45 @@ The historical data lives in **two workbooks, same 6-tab structure**:
 in the main repo concatenates the two back into the flat CSVs `build_history.py`
 reads.
 
+### Navigation
+
 The **Historical Events** Home card opens a sub-page (`showHistorical`,
 `tpl-historical-home`) with two choices: *Current Genocide* (`era: "recent"` →
 Ongoing workbook) and *Historical War Crimes* (`era: "pre"` → Historical
-workbook). Picking one calls `showHistoricalEra(era)`, which renders that set's
-list and form. The `era` rides along on every `hist_events` GET,
-`submit_hist_event` and `update_hist_event` call. `listHistEvents(era)` filters
-to that workbook (no `era` = both, still tagged); a submit or edit writes to
-that workbook.
+workbook). Picking one calls `showHistoricalEra(era)` → the **event list** for
+that workbook plus a "+ Document a new event" button. The `era` rides along on
+every historical GET/POST. `listHistEvents(era)` reads only that workbook (no
+`era` = both, each row still tagged).
 
-Each new-event form takes: name, type, dates, location (historical +
-current + lat/lng), perpetrators, classification, casualty figures (free text —
-the sheet stores `"≈107–250"` etc), three summary paragraphs, **and repeatable
-Details rows** — "+ Add" mini-rows for `war_crime` findings, `source`
-(name + URL), `testimony` (quote + attribution) and `casualty` / key facts
-(label + value + note). On submit the backend:
+- **Select an event** → `showHistEvent(era, ev)` (`tpl-hist-event`): the saved
+  `Events` row rendered read-only (facts table + summary paragraphs), the
+  event's recorded `Details` rows grouped by category
+  (`hist_event_details` → `listHistEventDetails(era, name)`), and an **add
+  detail records** form — the same repeatable groups, posting
+  `add_hist_details` → `addHistDetails()` → `appendHistDetails_(name, details,
+  era, throwOnError=true)`. Add-only: existing rows are never touched. Editors
+  also get an **Edit event fields** button here (`update_hist_event`).
+- **+ Document a new event** → `showHistNewEvent(era)` (`tpl-hist-new`): the
+  full event form + first Details rows, posting `submit_hist_event`. Appends an
+  `Events` row via the same insert-and-drag-the-`id`-formula dance as
+  `submitIncident` — stamps `author` + `added_by` = the volunteer, `last_updated`
+  = today, `submission_id` — then appends the Details rows (best-effort).
 
-- appends an `Events` row via the same insert-and-drag-the-`id`-formula dance as
-  `submitIncident` (`id` is a running-counter formula, not typed) — stamps
-  `author` + `added_by` = the volunteer's email, `last_updated` = today,
-  `submission_id`;
-- appends each detail row to the same era's `Details` tab
-  (`appendHistDetails_(name, details, era)`, `category` + `order` per group,
-  best-effort, ≤ 60 rows).
+The new-event form takes: name, type, dates, location (historical + current +
+lat/lng), perpetrators, classification, casualty figures (free text — the sheet
+stores `"≈107–250"` etc), three summary paragraphs, and repeatable Details rows
+for `war_crime` findings, `source` (name + URL), `testimony` (quote +
+attribution) and `casualty` / key facts (label + value + note).
 
-Editors get an **Edit** button per event (`update_hist_event`, matched on
-`event_name`, `row_mismatch` guard). Everything matches on `event_name`, never
-the `id` formula.
+Everything matches on `event_name`, never the running-counter `id` formula.
 
 **One-time:** add a `submission_id` header column to the `Events` tab of **both**
-workbooks (like the incidents tabs). Backend actions: `doGet ?action=hist_events&era=`,
-`doPost {action:"submit_hist_event", era}`, `doPost {action:"update_hist_event", era}`
-(editor). Log actions: `submit-hist` / `edit-hist`.
+workbooks (like the incidents tabs). Backend actions:
+`doGet ?action=hist_events&era=`, `doGet ?action=hist_event_details&era=&name=`,
+`doPost {action:"submit_hist_event", era}`,
+`doPost {action:"add_hist_details", era, name, details}`,
+`doPost {action:"update_hist_event", era}` (editor).
+Log actions: `submit-hist` / `add-hist-details` / `edit-hist`.
 
 Submissions reach the site on the **next `syncAll()`** (Sheet → CSV →
 `build-records.yml` → `build_history.py`), same as the facility incidents.

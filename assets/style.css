@@ -307,6 +307,19 @@ th { color: var(--muted); font-weight: 600; }
   color: var(--danger);
 }
 
+/* Historical event page — saved-data summary + recorded details */
+.hist-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.15rem 0.75rem;
+  margin: 0.5rem 0 1rem;
+  font-size: 0.9em;
+}
+.hist-facts dt { color: var(--muted); }
+.hist-facts dd { margin: 0; }
+.hist-det-cat { margin: 0.9rem 0 0.3rem; font-size: 0.9em; color: var(--muted); }
+.facility-row .date { font-weight: 600; display: block; }
+
 .policy-legend {
   margin: 0 0 1.25rem;
   padding: 0.75rem 1rem;

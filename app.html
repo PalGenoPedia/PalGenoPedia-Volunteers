@@ -53,23 +53,46 @@
     <button class="back-btn" data-role="back-to-hist-home">&larr; Historical Events</button>
     <h2 data-role="hist-era-label"></h2>
     <p class="muted small">
-      Fill in the event plus any war-crime findings, sources, testimony and key
-      facts you can source; a reviewer adds the timeline, legal analysis and
-      historical impact in the sheet afterwards.
+      Select an event to see what is already recorded and add more findings,
+      sources, testimony or key facts. Check this list before creating a new
+      event — this is the duplicate check.
     </p>
+    <button class="section-card" data-role="hist-new">
+      <strong>+ Document a new event</strong>
+      <span class="muted small">Not in the list? Add the event and its first details.</span>
+    </button>
+    <h3>Recorded events <span class="muted" data-role="hist-count"></span></h3>
+    <div class="list" data-role="hist-list"></div>
+  </section>
+</template>
+
+<template id="tpl-hist-new">
+  <section>
+    <button class="back-btn" data-role="back-to-era">&larr; Events</button>
+    <h2 data-role="hist-new-title">Document a new event</h2>
+    <form data-role="hist-form"></form>
+    <p class="error" data-role="hist-error" hidden></p>
+    <p class="success" data-role="hist-success" hidden>Submitted. A reviewer will verify it in the sheet.</p>
+  </section>
+</template>
+
+<template id="tpl-hist-event">
+  <section>
+    <button class="back-btn" data-role="back-to-era">&larr; Events</button>
+    <h2 data-role="hist-event-name"></h2>
+    <p class="muted small" data-role="hist-event-meta"></p>
+    <div data-role="hist-event-summary"></div>
 
     <div class="two-col">
       <div>
-        <h3>Recorded events <span class="muted" data-role="hist-count"></span></h3>
-        <p class="muted small">Check this list before submitting — this is the duplicate check.</p>
-        <div class="list" data-role="hist-list"></div>
+        <h3>Recorded details <span class="muted" data-role="hist-det-count"></span></h3>
+        <div class="list" data-role="hist-det-list"></div>
       </div>
-
       <div>
-        <h3>Document a new event</h3>
-        <form data-role="hist-form"></form>
-        <p class="error" data-role="hist-error" hidden></p>
-        <p class="success" data-role="hist-success" hidden>Submitted. A reviewer will verify it in the sheet.</p>
+        <h3>Add detail records</h3>
+        <form data-role="hist-det-form"></form>
+        <p class="error" data-role="hist-det-error" hidden></p>
+        <p class="success" data-role="hist-det-success" hidden>Added. A reviewer will verify it in the sheet.</p>
       </div>
     </div>
   </section>

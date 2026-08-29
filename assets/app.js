@@ -170,11 +170,14 @@ function showHistorical() {
   }
 }
 
+// Era landing: the event list + a "new event" button. Selecting an event opens
+// its own page (showHistEvent); the new-event form is its own page too.
 async function showHistoricalEra(era) {
   state.histEra = era;
   render("tpl-historical");
   el("back-to-hist-home").addEventListener("click", showHistorical);
   el("hist-era-label").textContent = HIST_ERAS[era].label + " — " + HIST_ERAS[era].sub;
+  el("hist-new").addEventListener("click", () => showHistNewEvent(era));
 
   const listEl = el("hist-list");
   listEl.innerHTML = '<p class="muted">Loading events…</p>';
@@ -182,13 +185,20 @@ async function showHistoricalEra(era) {
     const data = await apiGet({ action: "hist_events", era: era });
     state.histEvents = (data.events || []).sort((a, b) => (a.dateStart < b.dateStart ? 1 : -1));
     el("hist-count").textContent = `(${state.histEvents.length})`;
-    renderHistList(state.histEvents);
+    renderHistList(state.histEvents, era);
   } catch (e) {
     listEl.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
   }
+}
 
-  buildHistForm(el("hist-form"), {}, true);
-  el("hist-form").addEventListener("submit", async (evt) => {
+// Standalone "document a new event" page for one era.
+function showHistNewEvent(era) {
+  render("tpl-hist-new");
+  el("back-to-era").addEventListener("click", () => showHistoricalEra(era));
+  el("hist-new-title").textContent = "New event — " + HIST_ERAS[era].label;
+  const form = el("hist-form");
+  buildHistForm(form, {}, true);
+  form.addEventListener("submit", async (evt) => {
     evt.preventDefault();
     const btn = evt.target.querySelector('button[type="submit"]');
     const errEl = el("hist-error");
@@ -204,13 +214,124 @@ async function showHistoricalEra(era) {
         details: collectHistDetails(evt.target),
       });
       okEl.hidden = false;
-      showHistoricalEra(era); // reload list + reset form
+      setTimeout(() => showHistoricalEra(era), 900);
     } catch (e) {
       errEl.hidden = false;
       errEl.textContent = e.message;
       btn.disabled = false;
     }
   });
+}
+
+// One event's page: saved Events data + its recorded Details, plus a form to
+// append new Detail rows to this specific event.
+async function showHistEvent(era, ev) {
+  render("tpl-hist-event");
+  el("back-to-era").addEventListener("click", () => showHistoricalEra(era));
+  el("hist-event-name").textContent = ev.name;
+  const span = ev.dateStart && ev.dateEnd && ev.dateEnd !== ev.dateStart
+    ? ev.dateStart + " → " + ev.dateEnd : (ev.dateStart || ev.dateEnd || "");
+  el("hist-event-meta").textContent = [span, ev.type, ev.dateContext].filter(Boolean).join(" · ");
+
+  const sumEl = el("hist-event-summary");
+  const facts = [
+    ["Classification", ev.classification], ["Perpetrators", ev.perpetrators],
+    ["Deaths", ev.deaths], ["Injured", ev.injured], ["Forced displacement", ev.displacement],
+    ["Location (historical)", ev.locHistorical], ["Location (current)", ev.locCurrent],
+    ["Coordinates", ev.lat && ev.lng ? ev.lat + ", " + ev.lng : ""],
+  ].filter(([, v]) => v);
+  sumEl.innerHTML =
+    (facts.length ? `<dl class="hist-facts">${facts.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("")}</dl>` : "") +
+    [ev.summary1, ev.summary2, ev.summary3].filter(Boolean).map((p) => `<p>${escapeHtml(p)}</p>`).join("");
+  if (state.isEditor && ev.row) {
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "link-btn small";
+    edit.textContent = "Edit event fields";
+    edit.addEventListener("click", () => startEditHistEvent(sumEl, ev));
+    sumEl.prepend(edit);
+  }
+
+  await loadHistDetails(era, ev.name);
+
+  const form = el("hist-det-form");
+  form.innerHTML = "";
+  const note = document.createElement("p");
+  note.className = "muted small";
+  note.textContent = "Add as many rows as you can source. These append to the event — existing rows are not changed.";
+  form.appendChild(note);
+  for (const grp of HIST_DETAIL_GROUPS) form.appendChild(detailGroupEl(grp));
+  const submit = document.createElement("button");
+  submit.type = "submit";
+  submit.textContent = "Add detail records";
+  form.appendChild(submit);
+
+  form.addEventListener("submit", async (evt) => {
+    evt.preventDefault();
+    const errEl = el("hist-det-error");
+    const okEl = el("hist-det-success");
+    errEl.hidden = okEl.hidden = true;
+    const details = collectHistDetails(evt.target);
+    if (!details.length) {
+      errEl.hidden = false;
+      errEl.textContent = "Fill in at least one row first.";
+      return;
+    }
+    submit.disabled = true;
+    try {
+      await apiPost({ action: "add_hist_details", era: era, name: ev.name, details: details });
+      okEl.hidden = false;
+      showHistEvent(era, ev); // reload the recorded list + reset the form
+    } catch (e) {
+      errEl.hidden = false;
+      errEl.textContent = e.message;
+      submit.disabled = false;
+    }
+  });
+}
+
+const HIST_DET_LABELS = {
+  war_crime: "War-crime findings", source: "Sources", testimony: "Testimony",
+  casualty: "Key facts / casualties", quick_fact: "Quick facts", timeline: "Timeline",
+  legal: "Legal analysis", commander: "Commanders", personality: "People",
+  historical_impact: "Historical impact",
+};
+
+async function loadHistDetails(era, name) {
+  const listEl = el("hist-det-list");
+  listEl.innerHTML = '<p class="muted">Loading…</p>';
+  try {
+    const data = await apiGet({ action: "hist_event_details", era: era, name: name });
+    const rows = data.details || [];
+    el("hist-det-count").textContent = `(${rows.length})`;
+    if (!rows.length) {
+      listEl.innerHTML = '<p class="muted">Nothing recorded yet — be the first.</p>';
+      return;
+    }
+    const byCat = {};
+    for (const r of rows) (byCat[r.category] = byCat[r.category] || []).push(r);
+    listEl.innerHTML = "";
+    for (const cat of Object.keys(byCat)) {
+      const h = document.createElement("h4");
+      h.className = "hist-det-cat";
+      h.textContent = HIST_DET_LABELS[cat] || cat;
+      listEl.appendChild(h);
+      for (const r of byCat[cat]) {
+        const d = document.createElement("div");
+        d.className = "incident-row";
+        const bits = [r.headingLabel, r.value, r.content, r.source].filter(Boolean);
+        let html = `<div><div class="small">${escapeHtml(bits.join(" — ") || "(blank)")}</div>`;
+        if (r.sourceLink) {
+          html += `<div class="small"><a href="${encodeURI(r.sourceLink)}" target="_blank" rel="noopener">source ↗</a></div>`;
+        }
+        html += "</div>";
+        d.innerHTML = html;
+        listEl.appendChild(d);
+      }
+    }
+  } catch (e) {
+    listEl.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+  }
 }
 
 // The flat event fields only — the detail-section inputs have no `name`, so
@@ -248,7 +369,7 @@ function collectHistDetails(form) {
   return rows;
 }
 
-function renderHistList(events) {
+function renderHistList(events, era) {
   const listEl = el("hist-list");
   listEl.innerHTML = "";
   if (events.length === 0) {
@@ -256,20 +377,12 @@ function renderHistList(events) {
     return;
   }
   for (const ev of events) {
-    const row = document.createElement("div");
-    row.className = "incident-row";
-    const s = document.createElement("div");
-    s.innerHTML = `<div class="date">${escapeHtml(ev.name)}</div>
-      <div class="small">${escapeHtml(ev.dateStart || ev.dateEnd || "")}${ev.type ? " — " + escapeHtml(ev.type) : ""} · ${escapeHtml(truncate(ev.summary1 || "", 140))}</div>`;
-    row.appendChild(s);
-    if (state.isEditor) {
-      const edit = document.createElement("button");
-      edit.type = "button";
-      edit.className = "link-btn small";
-      edit.textContent = "Edit";
-      edit.addEventListener("click", () => startEditHistEvent(row, ev));
-      row.appendChild(edit);
-    }
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "facility-row";
+    row.innerHTML = `<span><span class="date">${escapeHtml(ev.name)}</span>
+      <span class="small muted">${escapeHtml(ev.dateStart || ev.dateEnd || "")}${ev.type ? " — " + escapeHtml(ev.type) : ""} · ${escapeHtml(truncate(ev.summary1 || "", 120))}</span></span>`;
+    row.addEventListener("click", () => showHistEvent(era, ev));
     listEl.appendChild(row);
   }
 }
