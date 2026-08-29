@@ -95,7 +95,7 @@ function showHome() {
   const grid = el("home-cats");
   const cats = [
     { label: "War Crimes", desc: "Universities, hospitals, schools, religious sites — document current incidents.", go: showSections },
-    { label: "Historical War Crimes", desc: "Massacres and pre-October-2023 events. Being built — wired later.", go: showHistorical },
+    { label: "Historical War Crimes", desc: "Massacres and mass-atrocity events — current genocide (Oct 2023 →) and pre-October 2023, each with its own form.", go: showHistorical },
   ];
   if (state.isEditor) {
     cats.push({ label: "Archiving Portal", desc: "Source (resource) and media archiving priorities.", go: showArchivingHome });
@@ -150,14 +150,36 @@ const HIST_DETAIL_GROUPS = [
     fields: [["heading_label", "Label (e.g. “Deaths”)", "text"], ["value", "Value (e.g. “≈107”)", "text"], ["content", "Note", "text"]] },
 ];
 
-async function showHistorical() {
-  render("tpl-historical");
+const HIST_ERAS = {
+  recent: { label: "Current genocide", sub: "October 2023 → present (Ongoing workbook)" },
+  pre:    { label: "Pre-October 2023", sub: "Nakba 1948 → 2022 (Historical workbook)" },
+};
+
+// Sub-page picker: one form per era.
+function showHistorical() {
+  render("tpl-historical-home");
   el("back-to-home").addEventListener("click", showHome);
+  const grid = el("hist-eras");
+  for (const key of ["recent", "pre"]) {
+    const e = HIST_ERAS[key];
+    const btn = document.createElement("button");
+    btn.className = "section-card";
+    btn.innerHTML = `<strong>${escapeHtml(e.label)}</strong><span class="muted small">${escapeHtml(e.sub)}</span>`;
+    btn.addEventListener("click", () => showHistoricalEra(key));
+    grid.appendChild(btn);
+  }
+}
+
+async function showHistoricalEra(era) {
+  state.histEra = era;
+  render("tpl-historical");
+  el("back-to-hist-home").addEventListener("click", showHistorical);
+  el("hist-era-label").textContent = HIST_ERAS[era].label + " — " + HIST_ERAS[era].sub;
 
   const listEl = el("hist-list");
   listEl.innerHTML = '<p class="muted">Loading events…</p>';
   try {
-    const data = await apiGet({ action: "hist_events" });
+    const data = await apiGet({ action: "hist_events", era: era });
     state.histEvents = (data.events || []).sort((a, b) => (a.dateStart < b.dateStart ? 1 : -1));
     el("hist-count").textContent = `(${state.histEvents.length})`;
     renderHistList(state.histEvents);
@@ -176,12 +198,13 @@ async function showHistorical() {
     try {
       await apiPost({
         action: "submit_hist_event",
+        era: era,
         submissionId: crypto.randomUUID(),
         fields: eventFieldValues(evt.target),
         details: collectHistDetails(evt.target),
       });
       okEl.hidden = false;
-      showHistorical(); // reload list + reset form
+      showHistoricalEra(era); // reload list + reset form
     } catch (e) {
       errEl.hidden = false;
       errEl.textContent = e.message;
@@ -236,8 +259,7 @@ function renderHistList(events) {
     const row = document.createElement("div");
     row.className = "incident-row";
     const s = document.createElement("div");
-    const eraTag = ev.era === "recent" ? '<span class="req">ongoing</span> ' : "";
-    s.innerHTML = `<div class="date">${eraTag}${escapeHtml(ev.name)}</div>
+    s.innerHTML = `<div class="date">${escapeHtml(ev.name)}</div>
       <div class="small">${escapeHtml(ev.dateStart || ev.dateEnd || "")}${ev.type ? " — " + escapeHtml(ev.type) : ""} · ${escapeHtml(truncate(ev.summary1 || "", 140))}</div>`;
     row.appendChild(s);
     if (state.isEditor) {
@@ -366,7 +388,7 @@ function startEditHistEvent(rowEl, ev) {
   cancel.type = "button";
   cancel.className = "link-btn";
   cancel.textContent = "Cancel";
-  cancel.addEventListener("click", showHistorical);
+  cancel.addEventListener("click", () => showHistoricalEra(ev.era));
   form.appendChild(cancel);
 
   const errEl = document.createElement("p");
@@ -387,7 +409,7 @@ function startEditHistEvent(rowEl, ev) {
         name: ev.name,
         fields: eventFieldValues(form),
       });
-      showHistorical();
+      showHistoricalEra(ev.era);
     } catch (e) {
       errEl.hidden = false;
       errEl.textContent = e.message;

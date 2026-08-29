@@ -36,16 +36,27 @@
   </section>
 </template>
 
-<template id="tpl-historical">
+<template id="tpl-historical-home">
   <section>
     <button class="back-btn" data-role="back-to-home">&larr; Home</button>
     <h2>Historical War Crimes</h2>
     <p class="muted small">
-      Massacres and mass-atrocity events. The list shows both the historical
-      (1948→2022) and ongoing (Oct 2023→) sets — new submissions go to the
-      ongoing set. Fill in the event plus any war-crime findings, sources,
-      testimony and key facts you can source; a reviewer adds the timeline,
-      legal analysis and historical impact in the sheet afterwards.
+      Massacres and mass-atrocity events, split into two record sets. Pick the
+      one you are documenting — each has its own list and its own form, writing
+      to its own workbook.
+    </p>
+    <div class="grid" data-role="hist-eras"></div>
+  </section>
+</template>
+
+<template id="tpl-historical">
+  <section>
+    <button class="back-btn" data-role="back-to-hist-home">&larr; Historical War Crimes</button>
+    <h2>Historical War Crimes <span class="muted small" data-role="hist-era-label"></span></h2>
+    <p class="muted small">
+      Fill in the event plus any war-crime findings, sources, testimony and key
+      facts you can source; a reviewer adds the timeline, legal analysis and
+      historical impact in the sheet afterwards.
     </p>
 
     <div class="two-col">
