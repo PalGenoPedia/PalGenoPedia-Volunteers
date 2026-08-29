@@ -53,6 +53,26 @@ const VOLUNTEERS_SHEET_NAME = "Volunteers";
 // are only accepted if their `aud` claim matches this.
 const OAUTH_CLIENT_ID = "1017482285870-q0dl90l30asn736kad0u7qbucopj209a.apps.googleusercontent.com";
 
+// --- Archive-priorities dashboard (editor role) --------------------------
+// The main site repo. The portal reads data/source-domains.json (the domain
+// inventory the archiver emits) and commits data/archive-policy.json back.
+const MAIN_REPO = { owner: "PalGenoPedia", repo: "PalGenoPedia", branch: "main" };
+const POLICY_PATH = "data/archive-policy.json";
+const SOURCE_DOMAINS_PATH = "data/source-domains.json";
+
+const ARCHIVE_PRIORITIES = ["high", "normal", "skip"];
+const ARCHIVE_METHODS = ["wayback", "archivetoday", "archivebox", "manual"];
+
+// Fine-grained PAT — repo access limited to PalGenoPedia/PalGenoPedia,
+// permission Contents: Read and write, nothing else. Stored in
+// Project Settings -> Script properties as GITHUB_TOKEN. NEVER inline it here
+// (see README -> "Archive priorities").
+function githubToken_() {
+  const t = PropertiesService.getScriptProperties().getProperty("GITHUB_TOKEN");
+  if (!t) throw new PortalError("config_error", "GITHUB_TOKEN script property is not set.");
+  return t;
+}
+
 // Facilities-tab headers.
 const FACILITY_NAME_COL = "name";
 
@@ -103,6 +123,10 @@ function doGet(e) {
       if (!volunteer.isAdmin) throw new PortalError("not_authorized", "Only admins can view the activity log.");
       return jsonResponse({ entries: listActivityLog(200) });
     }
+    if (action === "archive_policy") {
+      if (!volunteer.isEditor) throw new PortalError("not_authorized", "Only editors can manage archive priorities.");
+      return jsonResponse(getArchivePolicy());
+    }
     return jsonResponse({ error: "unknown_action" });
   });
 }
@@ -117,6 +141,9 @@ function doPost(e) {
     }
     if (body.action === "update_incident") {
       return jsonResponse(updateIncident(body, volunteer));
+    }
+    if (body.action === "set_archive_policy") {
+      return jsonResponse(setArchivePolicy(body, volunteer));
     }
     return jsonResponse({ error: "unknown_action" });
   });
@@ -486,6 +513,153 @@ function validateSubmission(fields) {
       throw new PortalError("validation_failed", numField + " must be a non-negative number.");
     }
   }
+}
+
+// --- Archive-priorities dashboard --------------------------------------
+
+// GET data/source-domains.json (inventory) + data/archive-policy.json (current
+// rules) from the main repo, merged into what the dashboard table needs.
+function getArchivePolicy() {
+  const inv = githubGetContent_(SOURCE_DOMAINS_PATH);
+  const pol = githubGetContent_(POLICY_PATH);
+  const domains = (inv.json && inv.json.domains) || {};
+  const policy = (pol.json && pol.json.domains) || {};
+
+  const list = Object.keys(domains).map(function (d) {
+    const row = domains[d] || {};
+    return {
+      domain: d,
+      count: Number(row.count) || 0,
+      sample: String(row.sample || ""),
+      archived: Number(row.archived) || 0,
+      pending: Number(row.pending) || 0,
+      deferred: Number(row.deferred) || 0,
+    };
+  });
+
+  return {
+    domains: list,
+    policy: policy,
+    enums: { priority: ARCHIVE_PRIORITIES, method: ARCHIVE_METHODS },
+    note: inv.json ? "" : "The domain inventory isn't published yet — the main repo's build workflow generates data/source-domains.json.",
+  };
+}
+
+// Apply one or more { domain, priority, method } changes to
+// data/archive-policy.json in the main repo. Editor role only. Re-reads the
+// file (for its sha) immediately before writing, and retries once on a
+// concurrent-edit conflict.
+function setArchivePolicy(body, volunteer) {
+  if (!volunteer.isEditor) {
+    throw new PortalError("not_authorized", "Only editors can manage archive priorities.");
+  }
+  const changes = body.changes || [{ domain: body.domain, priority: body.priority, method: body.method }];
+  if (!changes.length) throw new PortalError("validation_failed", "No changes given.");
+  changes.forEach(function (c) {
+    if (!c.domain || String(c.domain).indexOf(".") === -1) {
+      throw new PortalError("validation_failed", "Bad domain: " + c.domain);
+    }
+    if (ARCHIVE_PRIORITIES.indexOf(c.priority) === -1) {
+      throw new PortalError("validation_failed", "Bad priority: " + c.priority);
+    }
+    if (ARCHIVE_METHODS.indexOf(c.method) === -1) {
+      throw new PortalError("validation_failed", "Bad method: " + c.method);
+    }
+  });
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const cur = githubGetContent_(POLICY_PATH);
+    const doc = cur.json && typeof cur.json === "object" ? cur.json : {};
+    if (!doc.domains || typeof doc.domains !== "object") doc.domains = {};
+
+    changes.forEach(function (c) {
+      doc.domains[String(c.domain).toLowerCase()] = { priority: c.priority, method: c.method };
+    });
+
+    const sorted = {};
+    Object.keys(doc.domains).sort().forEach(function (k) { sorted[k] = doc.domains[k]; });
+    doc.domains = sorted;
+    doc.version = 1;
+    doc.updated = Utilities.formatDate(new Date(), "Etc/UTC", "yyyy-MM-dd");
+    doc.updated_by = volunteer.email;
+
+    const label = changes.length === 1
+      ? changes[0].domain + " → " + changes[0].priority + "/" + changes[0].method
+      : changes.length + " domains";
+
+    try {
+      githubPutContent_(POLICY_PATH, doc, cur.sha,
+        "archive-policy: " + label + " (" + volunteer.email + ")");
+    } catch (err) {
+      if (err.code === "policy_conflict" && attempt === 0) continue;
+      throw err;
+    }
+
+    changes.forEach(function (c) {
+      logSubmission(volunteer.email, "archive-policy", "-", c.domain, c.priority + "/" + c.method);
+    });
+    return { ok: true, updated: doc.updated };
+  }
+  throw new PortalError("policy_conflict", "Another edit landed first — reload and try again.");
+}
+
+// --- GitHub Contents API (main repo) ----------------------------------
+
+function githubHeaders_() {
+  return {
+    Authorization: "token " + githubToken_(),
+    Accept: "application/vnd.github+json",
+    "User-Agent": "PalGenoPedia-Volunteer-Portal",
+  };
+}
+
+// { json, sha } for a repo file. json is null (sha null) on 404. Throws on any
+// other non-200.
+function githubGetContent_(path) {
+  const url = "https://api.github.com/repos/" + MAIN_REPO.owner + "/" + MAIN_REPO.repo +
+    "/contents/" + path + "?ref=" + encodeURIComponent(MAIN_REPO.branch);
+  const res = UrlFetchApp.fetch(url, { headers: githubHeaders_(), muteHttpExceptions: true });
+  const code = res.getResponseCode();
+  if (code === 404) return { json: null, sha: null };
+  if (code !== 200) {
+    throw new PortalError("github_error", "GitHub GET " + path + " -> " + code + " " + res.getContentText().slice(0, 300));
+  }
+  const meta = JSON.parse(res.getContentText());
+  // GitHub wraps the base64 payload at 60 chars with newlines — strip whitespace
+  // before decoding or Utilities.base64Decode throws.
+  const b64 = String(meta.content || "").replace(/\s+/g, "");
+  const text = b64 ? Utilities.newBlob(Utilities.base64Decode(b64)).getDataAsString() : "";
+  let json = null;
+  try { json = text ? JSON.parse(text) : null; } catch (e) { json = null; }
+  return { json: json, sha: meta.sha };
+}
+
+// PUT a JSON object to a repo file. Pass sha=null to create. Maps GitHub's
+// stale-sha conflict (409/422) to PortalError "policy_conflict".
+function githubPutContent_(path, obj, sha, message) {
+  const url = "https://api.github.com/repos/" + MAIN_REPO.owner + "/" + MAIN_REPO.repo +
+    "/contents/" + path;
+  const payload = {
+    message: message,
+    content: Utilities.base64Encode(JSON.stringify(obj, null, 1), Utilities.Charset.UTF_8),
+    branch: MAIN_REPO.branch,
+  };
+  if (sha) payload.sha = sha;
+  const res = UrlFetchApp.fetch(url, {
+    method: "put",
+    headers: githubHeaders_(),
+    contentType: "application/json",
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+  });
+  const code = res.getResponseCode();
+  if (code === 409 || code === 422) {
+    throw new PortalError("policy_conflict", "The policy file changed under us.");
+  }
+  if (code !== 200 && code !== 201) {
+    throw new PortalError("github_error", "GitHub PUT " + path + " -> " + code + " " + res.getContentText().slice(0, 300));
+  }
+  return JSON.parse(res.getContentText());
 }
 
 // --- Audit log + failure notification ----------------------------------

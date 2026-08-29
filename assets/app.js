@@ -331,6 +331,146 @@ function formatTimestamp(iso) {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
 
+// --- Archive priorities (editor role) ----------------------------------
+
+const METHOD_LABELS = {
+  wayback: "Wayback Machine",
+  archivetoday: "archive.today",
+  archivebox: "ArchiveBox",
+  manual: "Manual",
+};
+
+async function showArchivePolicy() {
+  render("tpl-archive-policy");
+  el("back-to-sections").addEventListener("click", showSections);
+
+  const body = el("policy-body");
+  body.innerHTML = '<tr><td colspan="6" class="muted">Loading domains…</td></tr>';
+
+  let data;
+  try {
+    data = await apiGet({ action: "archive_policy" });
+  } catch (e) {
+    body.innerHTML = `<tr><td colspan="6" class="error">${escapeHtml(e.message)}</td></tr>`;
+    return;
+  }
+
+  const enums = data.enums || { priority: ["high", "normal", "skip"], method: Object.keys(METHOD_LABELS) };
+  const policy = data.policy || {};
+  // Unconfigured domains first (they need attention), then most-cited first.
+  const rows = (data.domains || []).slice().sort((a, b) => {
+    const ca = !!policy[a.domain], cb = !!policy[b.domain];
+    if (ca !== cb) return ca ? 1 : -1;
+    return b.count - a.count;
+  });
+
+  if (data.note) {
+    const p = el("policy-error");
+    p.hidden = false;
+    p.classList.add("muted");
+    p.textContent = data.note;
+  }
+
+  function draw(list) {
+    body.innerHTML = "";
+    if (list.length === 0) {
+      body.innerHTML = '<tr><td colspan="6" class="muted">No domains.</td></tr>';
+      return;
+    }
+    for (const row of list) {
+      const rule = policy[row.domain] || null;
+      const tr = document.createElement("tr");
+      tr.className = "policy-row" + (rule && rule.priority === "skip" ? " policy-row--skip" : "");
+
+      const dom = document.createElement("td");
+      dom.innerHTML = `<a href="${escapeHtml(row.sample)}" target="_blank" rel="noopener noreferrer">${escapeHtml(row.domain)}</a>`;
+      tr.appendChild(dom);
+
+      const count = document.createElement("td");
+      count.textContent = row.count;
+      tr.appendChild(count);
+
+      const arch = document.createElement("td");
+      arch.className = "small";
+      arch.textContent =
+        `${row.archived}✓` +
+        (row.pending ? ` ${row.pending}⏳` : "") +
+        (row.deferred ? ` ${row.deferred}→` : "");
+      tr.appendChild(arch);
+
+      const priSel = buildSelect(enums.priority, rule ? rule.priority : "", (v) => cap(v), "— set —");
+      const metSel = buildSelect(enums.method, rule ? rule.method : "wayback", (v) => METHOD_LABELS[v] || v);
+
+      const priTd = document.createElement("td");
+      priTd.appendChild(priSel);
+      tr.appendChild(priTd);
+
+      const metTd = document.createElement("td");
+      metTd.appendChild(metSel);
+      tr.appendChild(metTd);
+
+      const statusTd = document.createElement("td");
+      statusTd.className = "small";
+      tr.appendChild(statusTd);
+
+      async function save() {
+        const priority = priSel.value;
+        const method = metSel.value;
+        if (!priority) return; // still unset
+        priSel.disabled = metSel.disabled = true;
+        statusTd.textContent = "Saving…";
+        statusTd.className = "small muted";
+        try {
+          const res = await apiPost({ action: "set_archive_policy", domain: row.domain, priority, method });
+          policy[row.domain] = { priority, method };
+          tr.classList.toggle("policy-row--skip", priority === "skip");
+          statusTd.textContent = "Saved " + (res.updated || "");
+          statusTd.className = "small policy-saved";
+        } catch (e) {
+          statusTd.textContent = e.message;
+          statusTd.className = "small error";
+        } finally {
+          priSel.disabled = metSel.disabled = false;
+        }
+      }
+      priSel.addEventListener("change", save);
+      metSel.addEventListener("change", save);
+
+      body.appendChild(tr);
+    }
+  }
+
+  draw(rows);
+  el("policy-filter").addEventListener("input", (evt) => {
+    const q = evt.target.value.trim().toLowerCase();
+    draw(rows.filter((r) => r.domain.includes(q)));
+  });
+}
+
+function buildSelect(values, selected, labelFn, placeholder) {
+  const sel = document.createElement("select");
+  if (placeholder) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = placeholder;
+    opt.disabled = true;
+    opt.selected = !selected;
+    sel.appendChild(opt);
+  }
+  for (const v of values) {
+    const opt = document.createElement("option");
+    opt.value = v;
+    opt.textContent = labelFn ? labelFn(v) : v;
+    if (v === selected) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  return sel;
+}
+
+function cap(s) {
+  return s ? s[0].toUpperCase() + s.slice(1) : s;
+}
+
 // --- Form / duplicate check -------------------------------------------
 
 function wireForm(facility) {
@@ -416,6 +556,11 @@ function truncate(str, n) {
     state.isAdmin = !!data.isAdmin;
     const badge = state.isAdmin ? " (admin)" : state.isEditor ? " (editor)" : "";
     document.getElementById("whoami").textContent = data.email + badge;
+    if (state.isEditor) {
+      const archiveLink = document.getElementById("archive-link");
+      archiveLink.hidden = false;
+      archiveLink.addEventListener("click", showArchivePolicy);
+    }
     if (state.isAdmin) {
       const adminLink = document.getElementById("admin-link");
       adminLink.hidden = false;

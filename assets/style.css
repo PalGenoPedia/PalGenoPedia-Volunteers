@@ -236,3 +236,23 @@ th, td {
   white-space: nowrap;
 }
 th { color: var(--muted); font-weight: 600; }
+
+/* Archive-priorities table */
+[data-role="policy-filter"] {
+  display: block;
+  width: 100%;
+  max-width: 22rem;
+  margin: 0.5rem 0 1rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.policy-row select {
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.policy-row--skip { opacity: 0.5; }
+.policy-saved { color: var(--success); }
+[data-role="policy-error"].muted { color: var(--muted); }

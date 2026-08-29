@@ -11,6 +11,7 @@
 <body>
 <header class="topbar">
   <span class="brand">PalGenoPedia Volunteer Portal</span>
+  <button id="archive-link" class="link-btn" hidden>Archive priorities</button>
   <button id="admin-link" class="link-btn" hidden>Activity log</button>
   <span id="whoami" class="muted"></span>
   <button id="signout" class="link-btn">Sign out</button>
@@ -105,6 +106,33 @@
           <p class="success" data-role="submit-success" hidden>Submitted. A reviewer will verify it in the sheet.</p>
         </form>
       </div>
+    </div>
+  </section>
+</template>
+
+<template id="tpl-archive-policy">
+  <section>
+    <button class="back-btn" data-role="back-to-sections">&larr; Sections</button>
+    <h2>Archive priorities</h2>
+    <p class="muted small">
+      One row per source domain in the data. Set a <strong>priority</strong> and an
+      <strong>archiving method</strong> per domain. The weekly archiver only touches
+      domains set to High or Normal with method <em>Wayback Machine</em> — everything
+      else is left alone or handed to another method. Changes commit straight to the
+      main site repo.
+    </p>
+    <input type="search" data-role="policy-filter" placeholder="Filter domains…">
+    <p class="error" data-role="policy-error" hidden></p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Domain</th><th>URLs</th><th>Archived</th>
+            <th>Priority</th><th>Method</th><th></th>
+          </tr>
+        </thead>
+        <tbody data-role="policy-body"></tbody>
+      </table>
     </div>
   </section>
 </template>

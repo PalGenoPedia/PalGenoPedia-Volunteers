@@ -149,10 +149,10 @@ actual boundary.
 
 ## Activity log (admin role)
 
-Every submission and edit is already written to the `SubmissionLog` tab in
-the admin spreadsheet, one row per action:
-`Timestamp, Volunteer email, Action ("submit"/"edit"), Section, Facility,
-Reference`. `admin`-role volunteers see this as a live "Activity log" view
+Every submission, edit, and archive-priority change is written to the
+`SubmissionLog` tab in the admin spreadsheet, one row per action:
+`Timestamp, Volunteer email, Action ("submit"/"edit"/"archive-policy"),
+Section, Facility, Reference`. `admin`-role volunteers see this as a live "Activity log" view
 in the portal itself (top bar → **Activity log**), most recent 200 entries,
 newest first — pulled straight from that tab via a `doGet` action gated on
 `isAdmin`, same non-authoritative-UI-check-plus-real-backend-check pattern
@@ -162,6 +162,51 @@ Non-admins (including editors) don't see the "Activity log" link and get
 `error: "not_authorized"` if they call the endpoint directly. Nothing
 about this changes what gets logged or when — it's a read-only view onto
 data the backend was already writing.
+
+## Archive priorities (editor role)
+
+The main site archives cited source URLs to the Wayback Machine
+(`tools/archive_links.py` + `.github/workflows/archive-links.yml` in the main
+repo). That run is **opt-in per source domain** — it only touches a domain an
+editor has configured here.
+
+Editors (and admins) get an **Archive priorities** view (top bar). It lists
+every source domain found in the data — `facebook.com`, `x.com`,
+`ochaopt.org`, `aljazeera.com`, `wafa.ps`, … — with its URL count and current
+archive status. Per domain the editor sets:
+
+- **Priority** — `High` / `Normal` / `Skip`. The weekly archiver does High
+  domains first; Skip (and any unconfigured domain) is left alone.
+- **Method** — `Wayback Machine` / `archive.today` / `ArchiveBox` / `Manual`.
+  Only `Wayback` is automated today; the others are recorded as "deferred to
+  <method>" and listed in `data/archive-deferred.txt` in the main repo for the
+  planned ArchiveBox layer. Set social-media domains (`x.com`, `facebook.com`)
+  to `archive.today` — Wayback just gets a login wall for those.
+
+### How it's wired
+
+- The dashboard reads **`data/source-domains.json`** from the main repo (the
+  archiver regenerates it on every CSV change) for the domain list + counts.
+- Saving a row commits **`data/archive-policy.json`** to
+  `PalGenoPedia/PalGenoPedia` via the GitHub Contents API — same mechanism as
+  the sheet sync. The commit fires `archive-links.yml`.
+- `doGet ?action=archive_policy` and `doPost {action:"set_archive_policy"}` are
+  both gated **server-side** on the editor role; the hidden top-bar button is
+  UI convenience only.
+
+### One-time setup
+
+1. On the PalGenoPedia GitHub account, create a **fine-grained personal access
+   token**:
+   - **Repository access:** only `PalGenoPedia/PalGenoPedia`.
+   - **Permissions:** `Contents` → **Read and write**. Nothing else.
+   - Set an expiry and calendar a rotation.
+2. In the portal's Apps Script project → **Project Settings** → **Script
+   properties** → add `GITHUB_TOKEN` = that token.
+   **Never** paste it into `Code.gs`.
+3. Redeploy the Web App (a new deployment version).
+
+`data/archive-policy.json` is created on the first save — nothing to seed.
 
 ## Explicitly out of scope
 
