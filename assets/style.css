@@ -307,6 +307,18 @@ th { color: var(--muted); font-weight: 600; }
   color: var(--danger);
 }
 
+/* Incident form — progressive-disclosure "More details" fields */
+.incident-extra p { margin: 0 0 0.5rem; }
+.extra-add-row { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.extra-add-row .link-btn {
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+}
+.extra-add-row:empty { display: none; }
+.source-extra-row { display: flex; gap: 0.4rem; align-items: flex-start; }
+.source-extra-row input { flex: 1 1 auto; }
+
 /* Historical event page — saved-data summary + recorded details */
 .hist-facts {
   display: grid;

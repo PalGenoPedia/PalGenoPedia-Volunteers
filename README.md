@@ -134,6 +134,23 @@ its portal submission even after `incident_id` shifts. That column must be
 added to each of the four incidents tabs once, manually, before this goes
 live.
 
+### Incident form fields
+
+Always shown, all required: `starting_date`, `attack_type`, `result`,
+`description` (short summary), `source_url_1`. Always shown, optional:
+`image_url`, `video_url`, `civilians_killed`, `civilians_injured`.
+
+Under a **"More details"** panel, each behind its own `+ <name>` button that
+reveals the field on click: **Time** (folded into `starting_date` as
+`YYYY-MM-DD HH:MM` — the sheet has no separate time column), `ending_date`,
+`full_discription` (the long account), **Additional source URL(s)** — a
+repeatable row that writes every URL into `source_url_2` as one
+comma-separated cell — `hw_killed`, `hw_injured`.
+
+All of these columns already exist on the four `*_incidents` tabs, so there
+is no one-time setup beyond `submission_id` above. The editor "Edit" form
+(below) shows every field at once, pre-filled.
+
 ## Editing existing incidents
 
 Volunteers with the `editor` role (set in column B of the `Volunteers` tab —

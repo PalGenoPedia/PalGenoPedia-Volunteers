@@ -5,8 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>PalGenoPedia Volunteer Portal</title>
-<link rel="stylesheet" href="assets/style.css">
-<script src="config.js"></script>
+<!-- Cache-bust: bump ?v= on assets/app.js and assets/style.css in the SAME commit
+     that edits them. app.js has to stay in lockstep with the hand-deployed Apps
+     Script backend; a volunteer holding a cached app.js calls actions the deployed
+     Code.gs does not have (the "unknown_action / stale deploy" failure). -->
+<link rel="stylesheet" href="assets/style.css?v=4">
+<script src="config.js?v=3"></script>
 </head>
 <body>
 <header class="topbar">
@@ -147,10 +151,6 @@
           </label>
           <p class="warning" data-role="dup-warning" hidden></p>
 
-          <label>End date (if the incident spans multiple days)
-            <input type="date" name="ending_date">
-          </label>
-
           <label>Attack type <span class="req">*</span>
             <select name="attack_type" required>
               <option value="">Select…</option>
@@ -164,15 +164,16 @@
             </select>
           </label>
 
-          <label>Summary / full account
-            <textarea name="description" rows="5"></textarea>
+          <label>Result <span class="req">*</span>
+            <input type="text" name="result" required placeholder="e.g. building destroyed, ward out of service">
+          </label>
+
+          <label>Description <span class="req">*</span>
+            <textarea name="description" rows="3" required placeholder="Short summary of what happened"></textarea>
           </label>
 
           <label>Source URL <span class="req">*</span>
             <input type="url" name="source_url_1" required placeholder="https://…">
-          </label>
-          <label>Additional source URL
-            <input type="url" name="source_url_2" placeholder="https://…">
           </label>
 
           <label>Image URL
@@ -190,6 +191,13 @@
               <input type="number" name="civilians_injured" min="0" step="1">
             </label>
           </div>
+
+          <fieldset class="detail-group incident-extra">
+            <legend>More details</legend>
+            <p class="muted small">Optional. Click a button to add that field.</p>
+            <div data-role="extra-fields"></div>
+            <div class="extra-add-row" data-role="extra-buttons"></div>
+          </fieldset>
 
           <button type="submit">Submit incident</button>
           <p class="error" data-role="submit-error" hidden></p>
@@ -305,6 +313,6 @@
   </section>
 </template>
 
-<script src="assets/app.js"></script>
+<script src="assets/app.js?v=4"></script>
 </body>
 </html>

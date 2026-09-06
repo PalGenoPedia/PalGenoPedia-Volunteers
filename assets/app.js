@@ -38,6 +38,27 @@ const ATTACK_TYPES = [
   "Other",
 ];
 
+// Optional incident fields, hidden until the volunteer clicks "+ <label>".
+// [name, label, type] — type is any <input type> plus "textarea".
+// `starting_time` is folded into starting_date at submit ("YYYY-MM-DD HH:MM");
+// the sheet has no separate time column. `source_url_2` is handled specially
+// (repeatable → one comma-separated cell) and is not in this list.
+const INCIDENT_OPTIONAL_FIELDS = [
+  ["starting_time", "Time", "time"],
+  ["ending_date", "End date", "date"],
+  ["full_description", "Full account", "textarea"],
+  ["hw_killed", "HW killed", "number"],
+  ["hw_injured", "HW injured", "number"],
+];
+
+// Only http(s) may reach an href. Anything else - javascript:, data:, a bare
+// word - renders as no link at all rather than as a clickable payload.
+function safeUrl(u) {
+  const s = String(u || "").trim();
+  return /^https?:\/\//i.test(s) ? encodeURI(s) : "";
+}
+
+
 async function apiGet(params) {
   const url = new URL(CONFIG.API_URL);
   url.searchParams.set("token", idToken);
@@ -206,14 +227,26 @@ function showHistNewEvent(era) {
     errEl.hidden = okEl.hidden = true;
     btn.disabled = true;
     try {
-      await apiPost({
+      const res = await apiPost({
         action: "submit_hist_event",
         era: era,
         submissionId: crypto.randomUUID(),
         fields: eventFieldValues(evt.target),
         details: collectHistDetails(evt.target),
       });
+      // The event row saves first and is never rolled back, so the detail rows
+      // can fail on their own. Say so instead of showing a flat "saved" — the
+      // volunteer sourced those rows and needs to know they did not land.
       okEl.hidden = false;
+      const asked = Number(res.detailsRequested) || 0;
+      const saved = Number(res.detailsSaved) || 0;
+      if (asked && saved < asked) {
+        okEl.textContent =
+          "Event saved, but " + (asked - saved) + " of " + asked +
+          " detail row(s) could not be written. A coordinator has been notified — " +
+          "open the event from the list and re-add them.";
+        return;   // stay put; do not bounce back to the list
+      }
       setTimeout(() => showHistoricalEra(era), 900);
     } catch (e) {
       errEl.hidden = false;
@@ -322,7 +355,14 @@ async function loadHistDetails(era, name) {
         const bits = [r.headingLabel, r.value, r.content, r.source].filter(Boolean);
         let html = `<div><div class="small">${escapeHtml(bits.join(" — ") || "(blank)")}</div>`;
         if (r.sourceLink) {
-          html += `<div class="small"><a href="${encodeURI(r.sourceLink)}" target="_blank" rel="noopener">source ↗</a></div>`;
+          // safeUrl, not encodeURI: encodeURI happily passes "javascript:..."
+          // through. add_hist_details validates source_link server-side, but
+          // rows typed straight into the Details tab bypass that, and this
+          // renders whatever the sheet holds.
+          const href = safeUrl(r.sourceLink);
+          if (href) {
+            html += `<div class="small"><a href="${href}" target="_blank" rel="noopener">source ↗</a></div>`;
+          }
         }
         html += "</div>";
         d.innerHTML = html;
@@ -666,8 +706,22 @@ function startEditIncident(rowEl, incident) {
     form.appendChild(wrapper);
     return input;
   };
+  const textArea = (label, name, value) => {
+    const wrapper = document.createElement("label");
+    wrapper.textContent = label;
+    const area = document.createElement("textarea");
+    area.name = name;
+    area.rows = 3;
+    area.value = value || "";
+    wrapper.appendChild(area);
+    form.appendChild(wrapper);
+    return area;
+  };
 
-  field("Date", "starting_date", "date", incident.date).required = true;
+  // incident.date may carry a merged time ("YYYY-MM-DD HH:MM").
+  const [datePart, timePart] = String(incident.date || "").split(" ");
+  field("Date", "starting_date", "date", datePart).required = true;
+  field("Time", "starting_time", "time", timePart || "");
   field("End date", "ending_date", "date", incident.endingDate);
 
   const typeLabel = document.createElement("label");
@@ -684,21 +738,18 @@ function startEditIncident(rowEl, incident) {
   typeLabel.appendChild(typeSelect);
   form.appendChild(typeLabel);
 
-  const descLabel = document.createElement("label");
-  descLabel.textContent = "Summary / full account";
-  const descArea = document.createElement("textarea");
-  descArea.name = "description";
-  descArea.rows = 4;
-  descArea.value = incident.description || "";
-  descLabel.appendChild(descArea);
-  form.appendChild(descLabel);
+  field("Result", "result", "text", incident.result).required = true;
+  textArea("Description", "description", incident.description).required = true;
+  textArea("Full account", "full_description", incident.fullDescription);
 
   field("Source URL", "source_url_1", "url", incident.sourceUrl1).required = true;
-  field("Additional source URL", "source_url_2", "url", incident.sourceUrl2);
+  field("Additional source URL(s) — comma-separated", "source_url_2", "text", incident.sourceUrl2);
   field("Image URL", "image_url", "url", incident.imageUrl);
   field("Video URL", "video_url", "url", incident.videoUrl);
   field("Civilians killed", "civilians_killed", "number", incident.civiliansKilled);
   field("Civilians injured", "civilians_injured", "number", incident.civiliansInjured);
+  field("HW killed", "hw_killed", "number", incident.hwKilled);
+  field("HW injured", "hw_injured", "number", incident.hwInjured);
 
   const saveBtn = document.createElement("button");
   saveBtn.type = "submit";
@@ -727,7 +778,7 @@ function startEditIncident(rowEl, incident) {
         section: state.currentSection.id,
         facility: facility.id,
         row: incident.row,
-        fields: Object.fromEntries(new FormData(form).entries()),
+        fields: collectIncidentFields(form),
       });
       showFacilityDetail(facility);
     } catch (e) {
@@ -1082,10 +1133,123 @@ function cap(s) {
 
 // --- Form / duplicate check -------------------------------------------
 
+// Builds one revealable optional field. Returns the <label> wrapper. `spec`
+// is an [name, label, type] entry; `value` pre-fills (edit form).
+function optionalFieldEl(spec, value) {
+  const [name, label, type] = spec;
+  const wrap = document.createElement("label");
+  wrap.textContent = label;
+  const input = type === "textarea" ? document.createElement("textarea") : document.createElement("input");
+  if (type === "textarea") input.rows = 3;
+  else input.type = type;
+  if (type === "number") { input.min = "0"; input.step = "1"; }
+  input.name = name;
+  if (value != null && value !== "") input.value = value;
+  wrap.appendChild(input);
+  return wrap;
+}
+
+// The repeatable "Additional source URL" block: one row per URL, a "+ another
+// source" link, all collected into a single comma-separated source_url_2.
+function sourceExtraEl(values) {
+  const wrap = document.createElement("label");
+  wrap.textContent = "Additional source URL(s)";
+  const rows = document.createElement("div");
+  const addRow = (v) => {
+    const row = document.createElement("div");
+    row.className = "source-extra-row";
+    const inp = document.createElement("input");
+    inp.type = "url";
+    inp.className = "source-extra";
+    inp.placeholder = "https://…";
+    if (v) inp.value = v;
+    row.appendChild(inp);
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.className = "detail-remove link-btn";
+    rm.textContent = "×";
+    rm.title = "Remove";
+    rm.addEventListener("click", () => {
+      row.remove();
+      if (!rows.querySelector(".source-extra-row")) addRow("");
+    });
+    row.appendChild(rm);
+    rows.appendChild(row);
+  };
+  const seed = (values && values.length ? values : [""]);
+  seed.forEach(addRow);
+  wrap.appendChild(rows);
+  const more = document.createElement("button");
+  more.type = "button";
+  more.className = "link-btn small";
+  more.textContent = "+ another source";
+  more.addEventListener("click", () => addRow(""));
+  wrap.appendChild(more);
+  return wrap;
+}
+
+// Wires the "More details" area: a button per hidden field that, on click,
+// swaps itself for the field. `prefill` (edit form) opens fields that already
+// have a value. Returns nothing — reads happen via collectIncidentFields().
+function wireExtraFields(form, prefill) {
+  const fieldsBox = el("extra-fields", form) || form.querySelector('[data-role="extra-fields"]');
+  const btnBox = el("extra-buttons", form) || form.querySelector('[data-role="extra-buttons"]');
+  prefill = prefill || {};
+
+  // source_url_2 is a pseudo-spec so it gets a button like the rest; slot it
+  // in after "Full account".
+  const SRC = ["source_url_2", "Additional source URL(s)", "source"];
+  const specs = INCIDENT_OPTIONAL_FIELDS.slice();
+  specs.splice(3, 0, SRC);
+
+  const reveal = (spec, btn) => {
+    btn.remove();
+    if (spec === SRC) {
+      fieldsBox.appendChild(sourceExtraEl(splitSources(prefill.source_url_2)));
+    } else {
+      fieldsBox.appendChild(optionalFieldEl(spec, prefill[spec[0]]));
+    }
+  };
+
+  for (const spec of specs) {
+    const has = spec === SRC ? splitSources(prefill.source_url_2).length : (prefill[spec[0]] != null && prefill[spec[0]] !== "");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "link-btn small";
+    btn.textContent = "+ " + spec[1];
+    btn.addEventListener("click", () => reveal(spec, btn));
+    btnBox.appendChild(btn);
+    if (has) reveal(spec, btn);
+  }
+}
+
+function splitSources(str) {
+  return String(str || "").split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+// Flattens the incident form to the { field: value } map the backend expects:
+// merges the repeatable secondary sources into source_url_2, folds the time
+// input into starting_date, and drops the helper-only `starting_time` key.
+function collectIncidentFields(form) {
+  const fields = Object.fromEntries(new FormData(form).entries());
+
+  const extraSources = [...form.querySelectorAll(".source-extra")]
+    .map((i) => i.value.trim()).filter(Boolean);
+  const allSources = [...splitSources(fields.source_url_2), ...extraSources];
+  if (allSources.length) fields.source_url_2 = allSources.join(", ");
+
+  if (fields.starting_time && fields.starting_date) {
+    fields.starting_date = fields.starting_date + " " + fields.starting_time;
+  }
+  delete fields.starting_time;
+  return fields;
+}
+
 function wireForm(facility) {
   const form = el("incident-form");
   const dateInput = form.querySelector('[name="starting_date"]');
   const dupWarning = el("dup-warning");
+  wireExtraFields(form);
 
   dateInput.addEventListener("change", () => {
     const match = findNearbyIncident(dateInput.value);
@@ -1109,13 +1273,12 @@ function wireForm(facility) {
     successEl.hidden = true;
     submitBtn.disabled = true;
 
-    const formData = new FormData(form);
     const payload = {
       action: "submit_incident",
       section: state.currentSection.id,
       facility: facility.id,
       submissionId: crypto.randomUUID(),
-      fields: Object.fromEntries(formData.entries()),
+      fields: collectIncidentFields(form),
     };
 
     try {
