@@ -178,7 +178,14 @@ actual boundary.
 Every submission, edit, and archive-policy change is written to the
 `SubmissionLog` tab in the admin spreadsheet, one row per action:
 `Timestamp, Volunteer email, Action ("submit"/"edit"/"source-policy"/
-"media-policy"/"manual-archive"), Section, Facility, Reference`. `admin`-role volunteers see this as a live "Activity log" view
+"media-policy"/"manual-archive"), Section, Facility, Reference`.
+
+Failed saves are logged too, as `submit-failed` / `submit-hist-failed`, with
+the sheet row number and the underlying Sheets error in `Reference`. A failed
+save is *not* a failed execution — `withErrorHandling` turns it into a normal
+JSON response, so it shows as **Completed** in the Apps Script execution list
+and is invisible there. This tab (and the coordinator email from
+`notifyCoordinatorOfFailure`) is where to look instead. `admin`-role volunteers see this as a live "Activity log" view
 in the portal itself (top bar → **Activity log**), most recent 200 entries,
 newest first — pulled straight from that tab via a `doGet` action gated on
 `isAdmin`, same non-authoritative-UI-check-plus-real-backend-check pattern

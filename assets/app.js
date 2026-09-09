@@ -92,7 +92,12 @@ async function handleApiResponse(res) {
       window.location.href = "index.html?denied=1";
       throw new Error("Not an approved volunteer.");
     }
-    throw new Error(payload.message || "Request failed.");
+    // Carry the machine-readable code alongside the human message. Callers
+    // that must react differently per failure (append_uncertain, below) need
+    // it; everything else keeps using e.message exactly as before.
+    const err = new Error(payload.message || "Request failed.");
+    err.code = payload.error || "";
+    throw err;
   }
   return payload;
 }
@@ -1292,7 +1297,13 @@ function wireForm(facility) {
     } catch (e) {
       errorEl.hidden = false;
       errorEl.textContent = e.message;
-      submitBtn.disabled = false;
+      // append_uncertain means the row reached the sheet but the confirming
+      // flush() failed, so the backend deliberately kept it. Re-enabling
+      // submit is exactly what would turn that into a duplicate, so leave the
+      // button disabled — the message tells them to give a coordinator the
+      // submission ID, and reopening the facility reloads the list anyway.
+      // (Deliberately not re-rendering here: that would wipe the message.)
+      if (e.code !== "append_uncertain") submitBtn.disabled = false;
     }
   });
 }
