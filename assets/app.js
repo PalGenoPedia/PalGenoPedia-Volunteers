@@ -26,17 +26,49 @@ let state = {
   isAdmin: false,
 };
 
-// Must match the <option> list in app.html's #incident-form exactly — the
-// edit form is built dynamically in JS and has no template of its own.
-const ATTACK_TYPES = [
-  "Airstrike",
-  "Shelling",
-  "Siege / access denial",
-  "Raid / incursion",
-  "Sniper fire",
-  "Detention of staff or patients",
-  "Other",
+// Attack type is recorded as three volunteer-facing dropdowns (core type,
+// proximity, access status) that get combined into a single string at
+// submit time — "Core — Proximity — Access status" — because that combined
+// string is what the sheet's attack_type column and its data validation
+// list actually store. The three arrays below must match the <option>
+// lists in app.html's #incident-form exactly (the edit form builds its own
+// selects from these same arrays — see startEditIncident).
+const ATTACK_CORE = [
+  "Airstrike / Aerial Bombardment",
+  "Shelling / Artillery",
+  "Ground Assault / Invasion",
+  "Armed Clashes / Fighting",
+  "Gunfire / Shooting",
+  "Siege / Encirclement",
+  "Generic Strike / Attack",
+  "Unidentified / Unspecified",
 ];
+const ATTACK_PROXIMITY = ["Direct hit", "Vicinity", "Unspecified"];
+const ATTACK_STATUS = [
+  "Access limited",
+  "Evacuated/Evacuation order",
+  "Forced evacuation",
+  "Ceased/out of service",
+  "Overwhelmed (capacity crisis)",
+  "N/A / No status",
+];
+
+// "Core — Proximity — Access status" — the exact separator used throughout
+// (spaced em dash) must stay byte-identical to the sheet's data validation
+// list, or "value not in list" errors return.
+function combineAttackType(core, proximity, status) {
+  return core && proximity && status ? `${core} — ${proximity} — ${status}` : "";
+}
+
+// Inverse of combineAttackType, for pre-filling the edit form from a stored
+// value. Incidents saved under the old flat 7-option list (e.g. "Airstrike")
+// won't split into three parts — they land entirely in `core`, leaving
+// proximity/status blank, which the edit form's selects will show as
+// unmatched/blank until the volunteer picks new values and re-saves.
+function splitAttackType(value) {
+  const parts = String(value || "").split(" — ");
+  return { core: parts[0] || "", proximity: parts[1] || "", status: parts[2] || "" };
+}
 
 // Optional incident fields, hidden until the volunteer clicks "+ <label>".
 // [name, label, type] — type is any <input type> plus "textarea".
@@ -729,19 +761,35 @@ function startEditIncident(rowEl, incident) {
   field("Time", "starting_time", "time", timePart || "");
   field("End date", "ending_date", "date", incident.endingDate);
 
-  const typeLabel = document.createElement("label");
-  typeLabel.textContent = "Attack type";
-  const typeSelect = document.createElement("select");
-  typeSelect.name = "attack_type";
-  typeSelect.required = true;
-  for (const t of ATTACK_TYPES) {
-    const opt = document.createElement("option");
-    opt.textContent = t;
-    if (t === incident.attackType) opt.selected = true;
-    typeSelect.appendChild(opt);
-  }
-  typeLabel.appendChild(typeSelect);
-  form.appendChild(typeLabel);
+  // Three linked selects instead of one flat dropdown — see ATTACK_CORE /
+  // ATTACK_PROXIMITY / ATTACK_STATUS and combineAttackType/splitAttackType
+  // above. Old incidents saved under the original 7-option list won't split
+  // cleanly (see splitAttackType's comment); those show blank proximity/
+  // status here until re-saved with new selections.
+  const parsedAttack = splitAttackType(incident.attackType);
+  const attackTypeSelect = (labelText, name, options, current, placeholder) => {
+    const wrap = document.createElement("label");
+    wrap.textContent = labelText;
+    const sel = document.createElement("select");
+    sel.name = name;
+    sel.required = true;
+    const blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = placeholder;
+    sel.appendChild(blank);
+    for (const t of options) {
+      const opt = document.createElement("option");
+      opt.textContent = t;
+      if (t === current) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    wrap.appendChild(sel);
+    form.appendChild(wrap);
+    return sel;
+  };
+  attackTypeSelect("Attack type", "attack_core", ATTACK_CORE, parsedAttack.core, "Type…");
+  attackTypeSelect("Proximity", "attack_proximity", ATTACK_PROXIMITY, parsedAttack.proximity, "Proximity…");
+  attackTypeSelect("Access status", "attack_status", ATTACK_STATUS, parsedAttack.status, "Access status…");
 
   field("Result", "result", "text", incident.result).required = true;
   textArea("Description", "description", incident.description).required = true;
@@ -1237,6 +1285,16 @@ function splitSources(str) {
 // input into starting_date, and drops the helper-only `starting_time` key.
 function collectIncidentFields(form) {
   const fields = Object.fromEntries(new FormData(form).entries());
+
+  // The volunteer picks core/proximity/status separately; the sheet only
+  // has one attack_type column, so fold the three into that single string
+  // here (both the new-incident form and the edit form share this fn).
+  if (fields.attack_core || fields.attack_proximity || fields.attack_status) {
+    fields.attack_type = combineAttackType(fields.attack_core, fields.attack_proximity, fields.attack_status);
+    delete fields.attack_core;
+    delete fields.attack_proximity;
+    delete fields.attack_status;
+  }
 
   const extraSources = [...form.querySelectorAll(".source-extra")]
     .map((i) => i.value.trim()).filter(Boolean);
