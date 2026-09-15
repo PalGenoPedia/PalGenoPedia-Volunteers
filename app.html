@@ -152,17 +152,44 @@
           <p class="warning" data-role="dup-warning" hidden></p>
 
           <label>Attack type <span class="req">*</span>
-            <select name="attack_type" required>
-              <option value="">Select…</option>
-              <option>Airstrike</option>
-              <option>Shelling</option>
-              <option>Siege / access denial</option>
-              <option>Raid / incursion</option>
-              <option>Sniper fire</option>
-              <option>Detention of staff or patients</option>
-              <option>Other</option>
+            <select name="attack_core" data-role="attack-core" required>
+              <option value="">Type…</option>
+              <option>Airstrike / Aerial Bombardment</option>
+              <option>Shelling / Artillery</option>
+              <option>Ground Assault / Invasion</option>
+              <option>Armed Clashes / Fighting</option>
+              <option>Gunfire / Shooting</option>
+              <option>Siege / Encirclement</option>
+              <option>Generic Strike / Attack</option>
+              <option>Unidentified / Unspecified</option>
             </select>
           </label>
+
+          <label>Proximity <span class="req">*</span>
+            <select name="attack_proximity" data-role="attack-proximity" required>
+              <option value="">Proximity…</option>
+              <option>Direct hit</option>
+              <option>Vicinity</option>
+              <option>Unspecified</option>
+            </select>
+          </label>
+
+          <label>Access status <span class="req">*</span>
+            <select name="attack_status" data-role="attack-status" required>
+              <option value="">Access status…</option>
+              <option>Access limited</option>
+              <option>Evacuated/Evacuation order</option>
+              <option>Forced evacuation</option>
+              <option>Ceased/out of service</option>
+              <option>Overwhelmed (capacity crisis)</option>
+              <option>N/A / No status</option>
+            </select>
+          </label>
+
+          <!-- No attack_type field here on purpose: collectIncidentFields() in
+               app.js builds "Core — Proximity — Access status" from the three
+               selects above at submit time. Must match the Google Sheets data
+               validation list exactly (see ATTACK_CORE/PROXIMITY/STATUS in app.js). -->
 
           <label>Result <span class="req">*</span>
             <input type="text" name="result" required placeholder="e.g. building destroyed, ward out of service">
@@ -313,6 +340,6 @@
   </section>
 </template>
 
-<script src="assets/app.js?v=5"></script>
+<script src="assets/app.js?v=6"></script>
 </body>
 </html>
