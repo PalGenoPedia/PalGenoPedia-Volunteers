@@ -83,6 +83,14 @@ const INCIDENT_OPTIONAL_FIELDS = [
   ["hw_injured", "HW injured", "number"],
 ];
 
+// Sentinel a bare <input type="time"> reports when the volunteer hasn't
+// actually chosen a time — treated identically to leaving Time blank. See
+// combineStartingDate() below: "no time entered" and "00:00 entered" are the
+// same intent ("this is a whole-day event"), and both must produce a bare
+// "YYYY-MM-DD" with nothing appended, in every timezone, not just whichever
+// one the sheet or a viewer's browser happens to be set to.
+const NO_TIME_VALUE = "00:00";
+
 // Only http(s) may reach an href. Anything else - javascript:, data:, a bare
 // word - renders as no link at all rather than as a clickable payload.
 function safeUrl(u) {
@@ -755,7 +763,9 @@ function startEditIncident(rowEl, incident) {
     return area;
   };
 
-  // incident.date may carry a merged time ("YYYY-MM-DD HH:MM").
+  // incident.date may carry a merged time ("YYYY-MM-DD HH:MM"). A bare date
+  // (no time part at all) pre-fills the Time input blank — not "00:00" —
+  // so re-saving without touching Time still means "no time", not midnight.
   const [datePart, timePart] = String(incident.date || "").split(" ");
   field("Date", "starting_date", "date", datePart).required = true;
   field("Time", "starting_time", "time", timePart || "");
@@ -1280,6 +1290,24 @@ function splitSources(str) {
   return String(str || "").split(",").map((s) => s.trim()).filter(Boolean);
 }
 
+// Combines a date input + a time input into what the backend expects for
+// starting_date, honoring "no time entered or 00:00 means the whole day,
+// regardless of anyone's timezone":
+//  - no date               -> "" (required-field validation catches this)
+//  - date only             -> "YYYY-MM-DD"
+//  - date + blank time     -> "YYYY-MM-DD" (nothing was entered)
+//  - date + "00:00"        -> "YYYY-MM-DD" (midnight == "no time", not an
+//                              actual instant to be timezone-adjusted)
+//  - date + any other time -> "YYYY-MM-DD HH:MM", taken as-is — the volunteer
+//                              is documenting a Gaza event and the <input
+//                              type="time"> is a wall-clock time with no zone
+//                              of its own, so this is already Gaza local time
+function combineStartingDate(datePart, timePart) {
+  if (!datePart) return "";
+  if (!timePart || timePart === NO_TIME_VALUE) return datePart;
+  return datePart + " " + timePart;
+}
+
 // Flattens the incident form to the { field: value } map the backend expects:
 // merges the repeatable secondary sources into source_url_2, folds the time
 // input into starting_date, and drops the helper-only `starting_time` key.
@@ -1301,9 +1329,7 @@ function collectIncidentFields(form) {
   const allSources = [...splitSources(fields.source_url_2), ...extraSources];
   if (allSources.length) fields.source_url_2 = allSources.join(", ");
 
-  if (fields.starting_time && fields.starting_date) {
-    fields.starting_date = fields.starting_date + " " + fields.starting_time;
-  }
+  fields.starting_date = combineStartingDate(fields.starting_date, fields.starting_time);
   delete fields.starting_time;
   return fields;
 }
@@ -1366,14 +1392,30 @@ function wireForm(facility) {
   });
 }
 
+// Duplicate-check comparison only — incident.date is now always a bare
+// "YYYY-MM-DD" or a "YYYY-MM-DD HH:MM" string meaning Gaza local time, never
+// something requiring timezone conversion. Comparing calendar days directly
+// (rather than via `new Date(...).getTime()`, which reintroduces exactly the
+// UTC-parsing pitfall this whole fix removes) keeps "nearby" meaning nearby
+// in Gaza time regardless of the volunteer's own browser timezone.
 function findNearbyIncident(dateStr) {
   if (!dateStr) return null;
-  const target = new Date(dateStr).getTime();
-  const oneDay = 24 * 60 * 60 * 1000;
+  const targetDay = dayNumber(dateStr);
+  if (targetDay == null) return null;
   return state.incidents.find((incident) => {
-    const d = new Date(incident.date).getTime();
-    return !Number.isNaN(d) && Math.abs(d - target) <= oneDay;
+    const day = dayNumber(incident.date);
+    return day != null && Math.abs(day - targetDay) <= 1;
   });
+}
+
+// "YYYY-MM-DD[ HH:MM]" -> an integer day count, computed from the calendar
+// fields directly (no Date object, no implicit timezone). Two dates one
+// calendar day apart differ by exactly 1, regardless of any time-of-day
+// component.
+function dayNumber(str) {
+  const m = String(str || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) / 86400000;
 }
 
 // --- Utilities ----------------------------------------------------------
